@@ -1,8 +1,8 @@
 from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
 from database import SessionLocal, engine, Base
-from crud import get_or_create_user, find_recruiters, get_or_create_recruiter, post_review, get_reviews
-from schemas import UserCreate, RecruiterCreate, ReviewCreate, ReviewResponse, RecruiterResponse, UserResponse
+from crud import get_or_create_user, get_or_create_recruiter, find_recruiters, post_review, get_reviews, get_companies
+from schemas import UserCreate, UserResponse, RecruiterCreate, RecruiterResponse, ReviewCreate, ReviewResponse, CompanyResponse
 from typing import List
 
 app = FastAPI()
@@ -25,8 +25,8 @@ def create_or_get_user(user: UserCreate, db: Session = Depends(get_db)):
 
 # Find Recruiter
 @app.get("/recruiter/", response_model=List[RecruiterResponse])
-def find_recruiter(firstname: str, lastname: str, company: str = None, db: Session = Depends(get_db)):
-    return find_recruiters(db, firstname, lastname, company)
+def find_recruiter(fullName: str, company: str = None, db: Session = Depends(get_db)):
+    return find_recruiters(db, fullName, company)
 
 # Create Recruiter
 @app.post("/recruiter/", response_model=RecruiterResponse)
@@ -43,3 +43,8 @@ def create_review(review: ReviewCreate, db: Session = Depends(get_db)):
 @app.get("/reviews/", response_model=List[ReviewResponse])
 def get_reviews_for_recruiter(recruiter_id: str, db: Session = Depends(get_db)):
     return get_reviews(db, recruiter_id)
+
+# Get All Companies
+@app.get("/companies/", response_model=List[CompanyResponse])
+def get_all_companies(db: Session = Depends(get_db)):
+    return get_companies(db)

@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List
 
 class UserCreate(BaseModel):
     linkedin_token: str
@@ -7,16 +7,25 @@ class UserCreate(BaseModel):
 class UserResponse(BaseModel):
     id: str
 
+class CompanyCreate(BaseModel):
+    name: str
+
+class CompanyResponse(BaseModel):
+    id: str
+    name: str
+
 class RecruiterCreate(BaseModel):
-    firstname: str
-    lastname: str
-    company: str
+    fullName: str
+    company: str  # Company name as input
 
 class RecruiterResponse(BaseModel):
     id: str
-    firstname: str
-    lastname: str
-    company: str
+    fullName: str
+    company: CompanyResponse
+    avg_resp: int
+    avg_prof: int
+    avg_help: int
+    summary: str
 
 class ReviewCreate(BaseModel):
     user_id: str

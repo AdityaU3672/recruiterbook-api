@@ -7,12 +7,22 @@ class User(Base):
     id = Column(String, primary_key=True, index=True)
     linkedin_token = Column(String, unique=True, index=True)
 
+class Company(Base):
+    __tablename__ = "companies"
+    id = Column(String, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True)
+
 class Recruiter(Base):
     __tablename__ = "recruiters"
     id = Column(String, primary_key=True, index=True)
-    firstname = Column(String, index=True)
-    lastname = Column(String, index=True)
-    company = Column(String, index=True)
+    fullName = Column(String, index=True)
+    company_id = Column(String, ForeignKey("companies.id"))
+    avg_resp = Column(Integer, default=0)
+    avg_prof = Column(Integer, default=0)
+    avg_help = Column(Integer, default=0)
+    summary = Column(String, default="")
+
+    company = relationship("Company")
 
 class Review(Base):
     __tablename__ = "reviews"
