@@ -20,8 +20,8 @@ class Recruiter(Base):
     avg_resp = Column(Integer, default=0)
     avg_prof = Column(Integer, default=0)
     avg_help = Column(Integer, default=0)
+    avg_final_stage = Column(Integer, default=0)
     summary = Column(String, default="")
-
     company = relationship("Company")
 
 class Review(Base):

@@ -25,6 +25,7 @@ class RecruiterResponse(BaseModel):
     avg_resp: int
     avg_prof: int
     avg_help: int
+    avg_final_stage: int
     summary: str
 
 class ReviewCreate(BaseModel):

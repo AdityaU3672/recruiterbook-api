@@ -51,6 +51,9 @@ def find_recruiters(db: Session, fullName: str, company: str = None):
         query = query.join(Company).filter(Company.name == company)
     return query.all()
 
+def get_recruiter_by_id(db: Session, recruiter_id: str):
+    return db.query(Recruiter).filter(Recruiter.id == recruiter_id).first()
+
 # Post a review
 def post_review(db: Session, review_data: ReviewCreate):
     existing_review = db.query(Review).filter(
@@ -73,6 +76,7 @@ def post_review(db: Session, review_data: ReviewCreate):
     recruiter.avg_resp = sum(r.responsiveness for r in reviews) // len(reviews)
     recruiter.avg_prof = sum(r.professionalism for r in reviews) // len(reviews)
     recruiter.avg_help = sum(r.helpfulness for r in reviews) // len(reviews)
+    recruiter.avg_final_stage = sum(r.final_stage for r in reviews) // len(reviews)  # New calculation
 
     db.commit()
 

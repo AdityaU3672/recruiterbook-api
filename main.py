@@ -1,7 +1,7 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import SessionLocal, engine, Base
-from crud import get_or_create_user, get_or_create_recruiter, find_recruiters, post_review, get_reviews, get_companies
+from crud import get_or_create_user, get_or_create_recruiter, find_recruiters, post_review, get_reviews, get_companies, get_recruiter_by_id
 from schemas import UserCreate, UserResponse, RecruiterCreate, RecruiterResponse, ReviewCreate, ReviewResponse, CompanyResponse
 from typing import List
 
@@ -27,6 +27,14 @@ def create_or_get_user(user: UserCreate, db: Session = Depends(get_db)):
 @app.get("/recruiter/", response_model=List[RecruiterResponse])
 def find_recruiter(fullName: str, company: str = None, db: Session = Depends(get_db)):
     return find_recruiters(db, fullName, company)
+
+@app.get("/recruiter/{recruiter_id}", response_model=RecruiterResponse)
+def get_recruiter(recruiter_id: str, db: Session = Depends(get_db)):
+    recruiter = get_recruiter_by_id(db, recruiter_id)
+    if not recruiter:
+        raise HTTPException(status_code=404, detail="Recruiter not found")
+    return recruiter
+
 
 # Create Recruiter
 @app.post("/recruiter/", response_model=RecruiterResponse)
