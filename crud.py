@@ -6,9 +6,9 @@ import uuid
 
 # User creation/login
 def get_or_create_user(db: Session, user_data: UserCreate):
-    user = db.query(User).filter(User.linkedin_token == user_data.linkedin_token).first()
+    user = db.query(User).filter(User.fullName == user_data.fullName).first()
     if not user:
-        user = User(id=str(uuid.uuid4()), linkedin_token=user_data.linkedin_token)
+        user = User(id=str(uuid.uuid4()), fullName=user_data.fullName)
         db.add(user)
         db.commit()
         db.refresh(user)

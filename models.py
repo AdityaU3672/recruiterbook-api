@@ -5,7 +5,7 @@ from database import Base
 class User(Base):
     __tablename__ = "users"
     id = Column(String, primary_key=True, index=True)
-    linkedin_token = Column(String, unique=True, index=True)
+    fullName = Column(String, unique=True, index=True)
 
 class Company(Base):
     __tablename__ = "companies"

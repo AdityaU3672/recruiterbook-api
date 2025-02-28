@@ -2,10 +2,11 @@ from pydantic import BaseModel
 from typing import List
 
 class UserCreate(BaseModel):
-    linkedin_token: str
+    fullName: str
 
 class UserResponse(BaseModel):
     id: str
+    fullName: str
 
 class CompanyCreate(BaseModel):
     name: str
