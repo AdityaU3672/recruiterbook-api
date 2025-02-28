@@ -5,6 +5,10 @@ from database import SessionLocal, engine, Base
 from crud import get_or_create_user, get_or_create_recruiter, find_recruiters, post_review, get_reviews, get_companies, get_recruiter_by_id
 from schemas import UserCreate, UserResponse, RecruiterCreate, RecruiterResponse, ReviewCreate, ReviewResponse, CompanyResponse
 from typing import List
+import uvicorn
+
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="0.0.0.0", port=8080)
 
 app = FastAPI()
 
