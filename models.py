@@ -10,7 +10,7 @@ class User(Base):
 class Company(Base):
     __tablename__ = "companies"
     id = Column(String, primary_key=True, index=True)
-    name = Column(String, unique=True, index=True)
+    name = Column(String, unique=True, index=True) 
 
 class Recruiter(Base):
     __tablename__ = "recruiters"

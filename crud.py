@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from models import User, Recruiter, Company, Review
 from schemas import UserCreate, RecruiterCreate, ReviewCreate
+from ai_service import generate_summary
 import uuid
 
 # User creation/login
@@ -77,6 +78,8 @@ def post_review(db: Session, review_data: ReviewCreate):
     recruiter.avg_prof = sum(r.professionalism for r in reviews) // len(reviews)
     recruiter.avg_help = sum(r.helpfulness for r in reviews) // len(reviews)
     recruiter.avg_final_stage = sum(r.final_stage for r in reviews) // len(reviews)  # New calculation
+    recruiter.summary = generate_summary(reviews)
+
 
     db.commit()
 
