@@ -4,7 +4,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# Initialize OpenAI client
+client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def generate_summary(reviews):
     """Generates an AI-powered summary for recruiter reviews."""
@@ -15,11 +16,13 @@ def generate_summary(reviews):
     for review in reviews:
         prompt += f"- {review.text}\n"
 
-    response = openai.ChatCompletion.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "system", "content": "You are an AI that summarizes recruiter reviews."},
-                  {"role": "user", "content": prompt}],
+    response = client.chat.completions.create(
+        model="gpt-4-turbo",
+        messages=[
+            {"role": "system", "content": "You are an AI that summarizes recruiter reviews."},
+            {"role": "user", "content": prompt}
+        ],
         max_tokens=150
     )
 
-    return response["choices"][0]["message"]["content"].strip()
+    return response.choices[0].message.content.strip() 
