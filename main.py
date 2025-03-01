@@ -15,8 +15,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://recruiterbook-api-production.up.railway.app", 
-        "http://localhost:3000", "https://recruiterbook.0x0.lat"],  # Change this to allow specific origins
+    allow_origins=["*"],  # Change this to allow specific origins
     allow_credentials=True,
     allow_methods=["*"],  # Allows all methods (GET, POST, etc.)
     allow_headers=["*"],  # Allows all headers
