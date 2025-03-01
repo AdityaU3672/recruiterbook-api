@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from sqlalchemy.orm import Session
 from database import SessionLocal, engine, Base
-from crud import get_or_create_user, get_or_create_recruiter, find_recruiters, post_review, get_reviews, get_companies, get_recruiter_by_id
+from crud import get_or_create_user, get_or_create_recruiter, find_recruiters, post_review, get_reviews, get_companies, get_recruiter_by_id, delete_company_by_name
 from schemas import UserCreate, UserResponse, RecruiterCreate, RecruiterResponse, ReviewCreate, ReviewResponse, CompanyResponse
 from typing import List
 import uvicorn
@@ -70,3 +70,10 @@ def get_reviews_for_recruiter(recruiter_id: str, db: Session = Depends(get_db)):
 @app.get("/companies/", response_model=List[CompanyResponse])
 def get_all_companies(db: Session = Depends(get_db)):
     return get_companies(db)
+
+@app.delete("/company/{company_name}")
+def delete_company(company_name: str, db: Session = Depends(get_db)):
+    company = delete_company_by_name(db, company_name)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    return {"message": f"Company '{company_name}' has been deleted successfully"}

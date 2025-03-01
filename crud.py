@@ -90,3 +90,12 @@ def get_reviews(db: Session, recruiter_id: str):
 
 def get_companies(db: Session):
     return db.query(Company).all()
+
+def delete_company_by_name(db: Session, company_name: str):
+    company = db.query(Company).filter(Company.name == company_name).first()
+    if not company:
+        return None  # Company not found
+    db.delete(company)
+    db.commit()
+    return company
+
