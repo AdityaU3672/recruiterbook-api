@@ -1,9 +1,8 @@
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from sqlalchemy.orm import Session
 from database import SessionLocal, engine, Base
-from crud import get_or_create_user, get_or_create_recruiter, find_recruiters, post_review, get_reviews, get_companies, get_recruiter_by_id, delete_company_by_name
+from crud import get_or_create_user, get_or_create_recruiter, find_recruiters, post_review, get_reviews, get_companies, get_recruiter_by_id, delete_company_by_name, get_all_reviews
 from schemas import UserCreate, UserResponse, RecruiterCreate, RecruiterResponse, ReviewCreate, ReviewResponse, CompanyResponse
 from typing import List
 import uvicorn
@@ -77,3 +76,8 @@ def delete_company(company_name: str, db: Session = Depends(get_db)):
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
     return {"message": f"Company '{company_name}' has been deleted successfully"}
+
+@app.get("/allReviews", response_model=List[ReviewResponse])
+def get_all_reviews_endpoint(db: Session = Depends(get_db)):
+    reviews = get_all_reviews(db)
+    return reviews

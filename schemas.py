@@ -40,6 +40,8 @@ class ReviewCreate(BaseModel):
 
 class ReviewResponse(BaseModel):
     id: int
+    user_id: str
+    recruiter_id: str
     professionalism: int
     responsiveness: int
     helpfulness: int

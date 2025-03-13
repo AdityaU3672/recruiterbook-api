@@ -88,6 +88,9 @@ def post_review(db: Session, review_data: ReviewCreate):
 def get_reviews(db: Session, recruiter_id: str):
     return db.query(Review).filter(Review.recruiter_id == recruiter_id).all()
 
+def get_all_reviews(db: Session):
+    return db.query(Review).all()
+
 def get_companies(db: Session):
     return db.query(Company).all()
 
