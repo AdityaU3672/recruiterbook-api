@@ -4,3 +4,4 @@ pydantic
 sqlalchemy
 python-dotenv
 openai
+better-profanity

@@ -58,6 +58,9 @@ def create_recruiter(recruiter: RecruiterCreate, db: Session = Depends(get_db)):
 @app.post("/review/")
 def create_review(review: ReviewCreate, db: Session = Depends(get_db)):
     status = post_review(db, review)
+    if status == 3:
+        raise HTTPException(status_code=403, detail="Profanity detected in review.")
+    
     return {"status": status}
 
 # Get Reviews

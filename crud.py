@@ -3,6 +3,7 @@ from models import User, Recruiter, Company, Review
 from schemas import UserCreate, RecruiterCreate, ReviewCreate
 from ai_service import generate_summary
 import uuid
+from better_profanity import profanity
 
 # User creation/login
 def get_or_create_user(db: Session, user_data: UserCreate):
@@ -62,6 +63,9 @@ def post_review(db: Session, review_data: ReviewCreate):
         Review.recruiter_id == review_data.recruiter_id
     ).first()
 
+    if is_profane(review_data.text):  # ✅ Check if review contains profanity
+        return 3 
+
     if existing_review:
         return 2  # Review already exists
 
@@ -101,4 +105,9 @@ def delete_company_by_name(db: Session, company_name: str):
     db.delete(company)
     db.commit()
     return company
+
+def is_profane(text):
+    """Check if a text contains profanity."""
+    profanity.load_censor_words()  # Load default profanity list
+    return profanity.contains_profanity(text)  # Returns True if text contains bad words
 
