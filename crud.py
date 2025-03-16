@@ -111,3 +111,37 @@ def is_profane(text):
     profanity.load_censor_words()  # Load default profanity list
     return profanity.contains_profanity(text)  # Returns True if text contains bad words
 
+def get_reviews_by_company(db: Session, company_name: str):
+    """Retrieve all reviews associated with a specific company."""
+    recruiters = db.query(Recruiter).filter(Recruiter.company == company_name).all()
+    
+    if not recruiters:
+        return []
+
+    recruiter_ids = [recruiter.id for recruiter in recruiters]
+    reviews = db.query(Review).filter(Review.recruiter_id.in_(recruiter_ids)).all()
+    
+    return reviews
+
+def upvote_review(db: Session, review_id: int):
+    """Increase upvote count for a review."""
+    review = db.query(Review).filter(Review.id == review_id).first()
+    if not review:
+        return None
+    review.upvotes += 1
+    db.commit()
+    db.refresh(review)
+    return review
+
+def downvote_review(db: Session, review_id: int):
+    """Increase downvote count for a review."""
+    review = db.query(Review).filter(Review.id == review_id).first()
+    if not review:
+        return None
+    review.downvotes += 1
+    db.commit()
+    db.refresh(review)
+    return review
+
+
+

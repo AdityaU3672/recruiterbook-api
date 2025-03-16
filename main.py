@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from database import SessionLocal, engine, Base
-from crud import get_or_create_user, get_or_create_recruiter, find_recruiters, post_review, get_reviews, get_companies, get_recruiter_by_id, delete_company_by_name, get_all_reviews
+from crud import downvote_review, get_or_create_user, get_or_create_recruiter, find_recruiters, get_reviews_by_company, post_review, get_reviews, get_companies, get_recruiter_by_id, delete_company_by_name, get_all_reviews, upvote_review
 from schemas import UserCreate, UserResponse, RecruiterCreate, RecruiterResponse, ReviewCreate, ReviewResponse, CompanyResponse
 from typing import List
 import uvicorn
@@ -48,6 +48,13 @@ def get_recruiter(recruiter_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Recruiter not found")
     return recruiter
 
+@app.get("/reviews/company/{company_name}", response_model=List[ReviewResponse])
+def get_reviews_for_company(company_name: str, db: Session = Depends(get_db)):
+    reviews = get_reviews_by_company(db, company_name)
+    if not reviews:
+        raise HTTPException(status_code=404, detail="No reviews found for this company")
+    return reviews
+
 
 # Create Recruiter
 @app.post("/recruiter/", response_model=RecruiterResponse)
@@ -84,3 +91,18 @@ def delete_company(company_name: str, db: Session = Depends(get_db)):
 def get_all_reviews_endpoint(db: Session = Depends(get_db)):
     reviews = get_all_reviews(db)
     return reviews
+
+@app.post("/review/{review_id}/upvote")
+def upvote(review_id: int, db: Session = Depends(get_db)):
+    review = upvote_review(db, review_id)
+    if not review:
+        raise HTTPException(status_code=404, detail="Review not found")
+    return {"message": "Upvote added", "upvotes": review.upvotes}
+
+@app.post("/review/{review_id}/downvote")
+def downvote(review_id: int, db: Session = Depends(get_db)):
+    review = downvote_review(db, review_id)
+    if not review:
+        raise HTTPException(status_code=404, detail="Review not found")
+    return {"message": "Downvote added", "downvotes": review.downvotes}
+

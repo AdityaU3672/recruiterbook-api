@@ -47,3 +47,5 @@ class ReviewResponse(BaseModel):
     helpfulness: int
     text: str
     final_stage: int
+    upvotes: int
+    downvotes: int
