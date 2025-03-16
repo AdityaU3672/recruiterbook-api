@@ -34,7 +34,7 @@ class Review(Base):
     helpfulness = Column(Integer)
     text = Column(String)
     final_stage = Column(Integer)
-    upvotes = Column(Integer, default=0)  # ✅ Add upvote count
+    upvotes = Column(Integer, default=0)  
     downvotes = Column(Integer, default=0)  
 
     user = relationship("User")
