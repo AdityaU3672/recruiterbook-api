@@ -17,12 +17,14 @@ def generate_summary(reviews):
         prompt += f"- {review.text}\n"
 
     response = client.chat.completions.create(
-        model="gpt-4-turbo",
+        model="o3-mini",
         messages=[
             {"role": "system", "content": "You are an AI that summarizes recruiter reviews."},
             {"role": "user", "content": prompt}
         ],
-        max_tokens=150
+        max_completion_tokens=150
     )
 
     return response.choices[0].message.content.strip() 
+
+

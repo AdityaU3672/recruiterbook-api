@@ -1,7 +1,9 @@
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from models import User, Recruiter, Company, Review
 from schemas import UserCreate, RecruiterCreate, ReviewCreate
 from ai_service import generate_summary
+from google import verify_recruiter
 import uuid
 from better_profanity import profanity
 
@@ -32,6 +34,12 @@ def get_or_create_recruiter(db: Session, recruiter_data: RecruiterCreate):
         Recruiter.fullName == recruiter_data.fullName,
         Recruiter.company_id == company.id
     ).first()
+
+    if not verify_recruiter(recruiter_data.fullName, recruiter_data.company):
+        raise HTTPException(
+            status_code=400,
+            detail="Recruiter verification failed. Recruiter does not appear to exist."
+        )
 
     if not recruiter:
         recruiter = Recruiter(
