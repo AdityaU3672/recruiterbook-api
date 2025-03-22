@@ -9,3 +9,4 @@ requests
 authlib
 PyJWT
 itsdangerous
+json
