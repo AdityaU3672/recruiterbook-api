@@ -98,6 +98,7 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
         const authData = {json.dumps(json.dumps(auth_data))};
         console.log("Auth Data:", authData);
         window.localStorage.setItem("authData", authData);
+        console.log("Local Storage after setting:", window.localStorage);
         // Delay redirect by 3 seconds so you can inspect the data:
         setTimeout(function() {{
             window.location.href = "{next_url}";
