@@ -53,6 +53,7 @@ async def google_login(request: Request):
     """
     Initiate the Google login flow.
     """
+    request.session.clear()
     redirect_uri = request.url_for('google_callback')
     return await oauth.google.authorize_redirect(request, str(redirect_uri))
 
