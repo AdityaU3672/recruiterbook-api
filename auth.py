@@ -49,15 +49,13 @@ def create_jwt_token(user_id: str) -> str:
     return jwt.encode(payload, JWT_SECRET_KEY, algorithm="HS256")
 
 @router.get("/google/login")
-async def google_login(request: Request):
-    """
-    Initiate the Google login flow.
-    """
-    # request.session.clear()
-    redirect_uri = request.url_for('google_callback')
+async def google_login(request: Request, next: str = None):
+    # Save the "next" URL in the session if provided
+    if next:
+        request.session["next"] = next
+    redirect_uri = request.url_for("google_callback")
     return await oauth.google.authorize_redirect(request, str(redirect_uri))
 
-from fastapi.responses import RedirectResponse
 
 @router.get("/google/callback")
 async def google_callback(request: Request, db: Session = Depends(get_db)):
@@ -70,24 +68,22 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
     full_name = profile.get("name", "Unknown")
     if not google_sub:
         raise HTTPException(status_code=400, detail="No 'sub' found in Google profile")
-
+    
     user_data = UserCreate(fullName=full_name, google_id=google_sub)
     user = get_or_create_user(db, user_data)
     jwt_token = create_jwt_token(user.id)
     
-    # Determine the redirect URL (e.g., your frontend's home page)
-    redirect_url = "http://localhost:3000/"  # Adjust as needed
-
+    # Get the "next" URL from the session; use a default if not set
+    redirect_url = request.session.pop("next", "https://your-frontend.com/home")
+    
     response = RedirectResponse(url=redirect_url)
     response.set_cookie(
         key="access_token",
         value=jwt_token,
         httponly=True,
-        secure=True,       # True in production with HTTPS
+        secure=True,       # Use True in production
         samesite="strict",
         max_age=JWT_EXPIRES_MINUTES * 60
     )
     
     return response
-
-
