@@ -7,5 +7,5 @@ openai
 better-profanity
 requests
 authlib
-jwt
+PyJWT
 itsdangerous
