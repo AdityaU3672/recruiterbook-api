@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 
 from database import SessionLocal
 from crud import get_or_create_user
+from models import User
 from schemas import UserCreate, UserResponse
 
 load_dotenv()
@@ -57,58 +58,70 @@ async def google_login(request: Request, next: str = None):
     return await oauth.google.authorize_redirect(request, str(redirect_uri))
 
 
-@router.get("/google/callback")
+@router.get("/google/callback", response_model=UserResponse)
 async def google_callback(request: Request, db: Session = Depends(get_db)):
     try:
         token = await oauth.google.authorize_access_token(request)
     except OAuthError as error:
         raise HTTPException(status_code=401, detail=str(error))
     
+    # Retrieve user info from Google
     resp = await oauth.google.userinfo(token=token)
-    profile = dict(resp)
-    
+    profile = dict(resp)  # Convert UserInfo object to dict
+
     google_sub = profile.get("sub")
     full_name = profile.get("name", "Unknown")
     if not google_sub:
         raise HTTPException(status_code=400, detail="No 'sub' found in Google profile")
-    
+
+    # Look up or create the user
     user_data = UserCreate(fullName=full_name, google_id=google_sub)
     user = get_or_create_user(db, user_data)
+    
+    # Generate JWT token for the user
     jwt_token = create_jwt_token(user.id)
     
-    # Retrieve the "next" URL from the session; default to homepage if not set.
+    # Retrieve the "next" URL from the session (or use a default)
     next_url = request.session.pop("next", "https://your-frontend.com/home")
     
-    # Prepare the auth data for the frontend (including the google_id)
-    auth_data = {
-        "access_token": jwt_token,
-        "token_type": "bearer",
-        "user": {
-            "id": user.id,
-            "fullName": user.fullName,
-            "google_id": user.google_id
-        }
-    }
+    # Prepare a redirect response
+    response = RedirectResponse(url=next_url)
+    response.set_cookie(
+        key="access_token",
+        value=jwt_token,
+        httponly=True,       # Not accessible by JavaScript
+        secure=True,         # Set to True in production with HTTPS
+        samesite="strict",   # Adjust based on your needs
+        max_age=JWT_EXPIRES_MINUTES * 60
+    )
     
-    # Return an HTML page that stores the auth data in localStorage and then redirects.
-    html_content = f"""
-    <html>
-    <head>
-        <script type="text/javascript">
-        const authData = {json.dumps(json.dumps(auth_data))};
-        console.log("Auth Data:", authData);
-        window.localStorage.setItem("authData", authData);
-        console.log("Local Storage after setting:", window.localStorage);
-        // Delay redirect by 3 seconds so you can inspect the data:
-        setTimeout(function() {{
-            window.location.href = "{next_url}";
-        }}, 3000);
-        </script>
-    </head>
-    <body>
-        <p>Logging you in, please wait...</p>
-    </body>
-    </html>
-    """
-    return HTMLResponse(content=html_content)
+    return response
+
+def get_current_user_from_cookie(request: Request, db: Session = Depends(get_db)):
+    token = request.cookies.get("access_token")
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=["HS256"])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Token missing subject")
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    
+    return user
+
+@router.get("/auth/me", response_model=UserResponse)
+def read_users_me(current_user: User = Depends(get_current_user_from_cookie)):
+    return current_user
+
+
+
 
