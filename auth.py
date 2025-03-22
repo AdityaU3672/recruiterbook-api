@@ -95,10 +95,10 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
     <html>
       <head>
         <script type="text/javascript">
-          // Save auth data in localStorage (so your frontend can access it)
-          window.localStorage.setItem("authData", {json.dumps(json.dumps(auth_data))});
-          // Redirect to the "next" URL
-          window.location.href = "{next_url}";
+            const authData = {json.dumps(json.dumps(auth_data))};
+            console.log("Auth Data:", authData);
+            window.localStorage.setItem("authData", authData);
+            window.location.href = "{next_url}";
         </script>
       </head>
       <body>
