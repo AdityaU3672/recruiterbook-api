@@ -12,7 +12,7 @@ def google_search(query: str):
         "q": query
     }
     response = requests.get(url, params=params)
-    return response.json()
+    return response.json()  
 
 def verify_recruiter(name: str, company: str) -> bool:
     query = f"{name} {company}"

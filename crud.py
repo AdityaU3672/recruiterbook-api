@@ -9,13 +9,31 @@ from better_profanity import profanity
 
 # User creation/login
 def get_or_create_user(db: Session, user_data: UserCreate):
-    user = db.query(User).filter(User.fullName == user_data.fullName).first()
+    """
+    Searches for a user by google_id. If not found, creates a new user.
+    Ignores fullName/email checks for uniqueness.
+    """
+    # 1. Attempt to find a user by google_id
+    user = None
+    if user_data.google_id:  # Make sure we actually have a google_id
+        user = db.query(User).filter(User.google_id == user_data.google_id).first()
+
+    # 2. If no user found, create a new one
     if not user:
-        user = User(id=str(uuid.uuid4()), fullName=user_data.fullName)
+        user = User(
+            id=str(uuid.uuid4()),
+            fullName=user_data.fullName,
+            google_id=user_data.google_id
+        )
         db.add(user)
         db.commit()
         db.refresh(user)
+
+    # 3. Return the user (existing or newly created)
     return user
+
+
+
 
 # Company creation (ensures no duplicates)
 def get_or_create_company(db: Session, company_name: str):
@@ -35,11 +53,11 @@ def get_or_create_recruiter(db: Session, recruiter_data: RecruiterCreate):
         Recruiter.company_id == company.id
     ).first()
 
-    if not verify_recruiter(recruiter_data.fullName, recruiter_data.company):
-        raise HTTPException(
-            status_code=400,
-            detail="Recruiter verification failed. Recruiter does not appear to exist."
-        )
+    # if not verify_recruiter(recruiter_data.fullName, recruiter_data.company):
+    #     raise HTTPException(
+    #         status_code=400,
+    #         detail="Recruiter verification failed. Recruiter does not appear to exist."
+    #     )
 
     if not recruiter:
         recruiter = Recruiter(

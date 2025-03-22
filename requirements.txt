@@ -6,3 +6,6 @@ python-dotenv
 openai
 better-profanity
 requests
+authlib
+jwt
+itsdangerous

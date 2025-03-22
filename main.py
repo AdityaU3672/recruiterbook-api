@@ -6,6 +6,8 @@ from crud import downvote_review, get_or_create_user, get_or_create_recruiter, f
 from schemas import UserCreate, UserResponse, RecruiterCreate, RecruiterResponse, ReviewCreate, ReviewResponse, CompanyResponse
 from typing import List
 import uvicorn
+from auth import router as auth_router
+from starlette.middleware.sessions import SessionMiddleware
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8080)
@@ -20,6 +22,8 @@ app.add_middleware(
     allow_headers=["*"],  # Allows all headers
 )
 
+app.add_middleware(SessionMiddleware, secret_key="YOUR_RANDOM_SECRET")
+
 # Initialize DB
 Base.metadata.create_all(bind=engine)
 
@@ -30,6 +34,8 @@ def get_db():
         yield db
     finally:
         db.close()
+
+app.include_router(auth_router, prefix="/auth", tags=["auth"])
 
 # User Authentication
 @app.post("/user/", response_model=UserResponse)

@@ -6,6 +6,7 @@ class User(Base):
     __tablename__ = "users"
     id = Column(String, primary_key=True, index=True)
     fullName = Column(String, unique=True, index=True)
+    google_id = Column(String, unique=True, index=True, nullable=True)
 
 class Company(Base):
     __tablename__ = "companies"

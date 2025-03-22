@@ -3,6 +3,7 @@ from typing import List
 
 class UserCreate(BaseModel):
     fullName: str
+    google_id: str | None = None
 
 class UserResponse(BaseModel):
     id: str
