@@ -1,10 +1,10 @@
 import os
 from datetime import datetime, timedelta
 import uuid
-
+import json
 import jwt
 from fastapi import APIRouter, Depends, Request, HTTPException
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse, HTMLResponse
 from sqlalchemy.orm import Session
 from authlib.integrations.starlette_client import OAuth, OAuthError
 from dotenv import load_dotenv
@@ -59,8 +59,11 @@ async def google_login(request: Request, next: str = None):
 
 @router.get("/google/callback")
 async def google_callback(request: Request, db: Session = Depends(get_db)):
-    # Process OAuth response to get auth data
-    token = await oauth.google.authorize_access_token(request)
+    try:
+        token = await oauth.google.authorize_access_token(request)
+    except OAuthError as error:
+        raise HTTPException(status_code=401, detail=str(error))
+    
     resp = await oauth.google.userinfo(token=token)
     profile = dict(resp)
     
@@ -73,17 +76,35 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
     user = get_or_create_user(db, user_data)
     jwt_token = create_jwt_token(user.id)
     
-    # Get the "next" URL from the session; use a default if not set
-    redirect_url = request.session.pop("next", "https://your-frontend.com/home")
+    # Retrieve the "next" URL from the session; default to homepage if not set.
+    next_url = request.session.pop("next", "https://your-frontend.com/home")
     
-    response = RedirectResponse(url=redirect_url)
-    response.set_cookie(
-        key="access_token",
-        value=jwt_token,
-        httponly=True,
-        secure=True,       # Use True in production
-        samesite="strict",
-        max_age=JWT_EXPIRES_MINUTES * 60
-    )
+    # Prepare the auth data for the frontend (including the google_id)
+    auth_data = {
+        "access_token": jwt_token,
+        "token_type": "bearer",
+        "user": {
+            "id": user.id,
+            "fullName": user.fullName,
+            "google_id": user.google_id
+        }
+    }
     
-    return response
+    # Return an HTML page that stores the auth data in localStorage and then redirects.
+    html_content = f"""
+    <html>
+      <head>
+        <script type="text/javascript">
+          // Save auth data in localStorage (so your frontend can access it)
+          window.localStorage.setItem("authData", {json.dumps(json.dumps(auth_data))});
+          // Redirect to the "next" URL
+          window.location.href = "{next_url}";
+        </script>
+      </head>
+      <body>
+        <p>Logging you in, please wait...</p>
+      </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
+
