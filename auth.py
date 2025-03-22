@@ -93,17 +93,20 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
     # Return an HTML page that stores the auth data in localStorage and then redirects.
     html_content = f"""
     <html>
-      <head>
+    <head>
         <script type="text/javascript">
-            const authData = {json.dumps(json.dumps(auth_data))};
-            console.log("Auth Data:", authData);
-            window.localStorage.setItem("authData", authData);
+        const authData = {json.dumps(json.dumps(auth_data))};
+        console.log("Auth Data:", authData);
+        window.localStorage.setItem("authData", authData);
+        // Delay redirect by 3 seconds so you can inspect the data:
+        setTimeout(function() {{
             window.location.href = "{next_url}";
+        }}, 3000);
         </script>
-      </head>
-      <body>
+    </head>
+    <body>
         <p>Logging you in, please wait...</p>
-      </body>
+    </body>
     </html>
     """
     return HTMLResponse(content=html_content)
