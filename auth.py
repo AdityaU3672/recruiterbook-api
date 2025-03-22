@@ -57,39 +57,37 @@ async def google_login(request: Request):
     redirect_uri = request.url_for('google_callback')
     return await oauth.google.authorize_redirect(request, str(redirect_uri))
 
-@router.get("/google/callback", response_model=UserResponse)
+from fastapi.responses import RedirectResponse
+
+@router.get("/google/callback")
 async def google_callback(request: Request, db: Session = Depends(get_db)):
-    """
-    Handle the callback from Google. 
-    """
-    try:
-        token = await oauth.google.authorize_access_token(request)
-    except OAuthError as error:
-        raise HTTPException(status_code=401, detail=str(error))
-
-    # CHANGE HERE: use `.userinfo(...)` instead of `.get("userinfo", ...)`
+    # Process OAuth response to get auth data
+    token = await oauth.google.authorize_access_token(request)
     resp = await oauth.google.userinfo(token=token)
-    profile = dict(resp)  # Replace resp.json() with dict(resp)
-
+    profile = dict(resp)
+    
     google_sub = profile.get("sub")
     full_name = profile.get("name", "Unknown")
-
     if not google_sub:
         raise HTTPException(status_code=400, detail="No 'sub' found in Google profile")
 
-    # Create or get user by google_id
     user_data = UserCreate(fullName=full_name, google_id=google_sub)
     user = get_or_create_user(db, user_data)
-
     jwt_token = create_jwt_token(user.id)
+    
+    # Determine the redirect URL (e.g., your frontend's home page)
+    redirect_url = "http://localhost:3000/"  # Adjust as needed
 
-    return JSONResponse(content={
-        "access_token": jwt_token,
-        "token_type": "bearer",
-        "user": {
-            "id": user.id,
-            "fullName": user.fullName,
-            "google_id": user.google_id
-        }
-    })
+    response = RedirectResponse(url=redirect_url)
+    response.set_cookie(
+        key="access_token",
+        value=jwt_token,
+        httponly=True,
+        secure=True,       # True in production with HTTPS
+        samesite="strict",
+        max_age=JWT_EXPIRES_MINUTES * 60
+    )
+    
+    return response
+
 
