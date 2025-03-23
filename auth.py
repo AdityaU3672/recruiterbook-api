@@ -91,7 +91,7 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
         value=jwt_token,
         httponly=True,       # Not accessible by JavaScript
         secure=True,         # Set to True in production with HTTPS
-        samesite="lax",   # Adjust based on your needs
+        samesite="none",   # Adjust based on your needs
         max_age=JWT_EXPIRES_MINUTES * 60
     )
     
