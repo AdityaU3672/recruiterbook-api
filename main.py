@@ -94,19 +94,19 @@ def delete_company(company_name: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Company not found")
     return {"message": f"Company '{company_name}' has been deleted successfully"}
 
-@app.get("/allReviews", response_model=List[ReviewResponse])
+@app.get("/allReviews/", response_model=List[ReviewResponse])
 def get_all_reviews_endpoint(db: Session = Depends(get_db)):
     reviews = get_all_reviews(db)
     return reviews
 
-@app.post("/review/{review_id}/upvote")
+@app.post("/review/upvote/{review_id}")
 def upvote(review_id: int, db: Session = Depends(get_db)):
     review = upvote_review(db, review_id)
     if not review:
         raise HTTPException(status_code=404, detail="Review not found")
     return {"message": "Upvote added", "upvotes": review.upvotes}
 
-@app.post("/review/{review_id}/downvote")
+@app.post("/review/downvote/{review_id}")
 def downvote(review_id: int, db: Session = Depends(get_db)):
     review = downvote_review(db, review_id)
     if not review:
