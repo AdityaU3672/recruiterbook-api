@@ -139,7 +139,7 @@ def is_profane(text):
 
 def get_reviews_by_company(db: Session, company_name: str):
     """Retrieve all reviews associated with a specific company."""
-    recruiters = db.query(Recruiter).filter(Recruiter.company == company_name).all()
+    recruiters = db.query(Recruiter).filter(Recruiter.company.has(name=company_name)).all()
     
     if not recruiters:
         return []
