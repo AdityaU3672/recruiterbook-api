@@ -17,7 +17,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Replace with your actual frontend URLs
+    allow_origins=["http://localhost:3000"],  # Add your production frontend URL when ready
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

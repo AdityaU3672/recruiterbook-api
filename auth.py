@@ -89,9 +89,10 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
     response.set_cookie(
         key="access_token",
         value=jwt_token,
-        httponly=True,       # Not accessible by JavaScript
-        secure=True,         # Required when using samesite="none"
+        httponly=True,
+        secure=True,
         samesite="none",     # Required for cross-site requests
+        path="/",            # Make cookie available for all paths
         max_age=JWT_EXPIRES_MINUTES * 60
     )
     
