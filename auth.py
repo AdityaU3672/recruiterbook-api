@@ -40,11 +40,12 @@ def get_db():
     finally:
         db.close()
 
-def create_jwt_token(user_id: str) -> str:
+def create_jwt_token(user_id: str, profile_pic: str) -> str:
     expires_delta = timedelta(minutes=JWT_EXPIRES_MINUTES)
     expiration = datetime.utcnow() + expires_delta
     payload = {
         "sub": user_id,
+        "pfp": profile_pic,
         "exp": expiration
     }
     return jwt.encode(payload, JWT_SECRET_KEY, algorithm="HS256")
@@ -71,6 +72,7 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
 
     google_sub = profile.get("sub")
     full_name = profile.get("name", "Unknown")
+    profile_pic = profile.get("picture")
     if not google_sub:
         raise HTTPException(status_code=400, detail="No 'sub' found in Google profile")
 
@@ -79,7 +81,7 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
     user = get_or_create_user(db, user_data)
     
     # Generate JWT token for the user
-    jwt_token = create_jwt_token(user.id)
+    jwt_token = create_jwt_token(user.id, profile_pic)
     
     # Retrieve the "next" URL from the session (or use a default)
     next_url = request.session.pop("next", "http://localhost:3000")
