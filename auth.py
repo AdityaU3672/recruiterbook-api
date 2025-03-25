@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import uuid
 import json
 import jwt
-from fastapi import APIRouter, Depends, Request, HTTPException
+from fastapi import APIRouter, Depends, Request, HTTPException, Response
 from fastapi.responses import JSONResponse, RedirectResponse, HTMLResponse
 from sqlalchemy.orm import Session
 from authlib.integrations.starlette_client import OAuth, OAuthError
@@ -125,12 +125,29 @@ def get_current_user_from_cookie(request: Request, db: Session = Depends(get_db)
         "google_id": user.google_id,
         "profile_pic": payload.get("pfp")  # "pfp" is included in the JWT token payload
     }
-    
+
     return user_data
 
 @router.get("/me", response_model=UserResponse)
 def read_users_me(current_user: User = Depends(get_current_user_from_cookie)):
     return current_user
+
+@router.post("/logout")
+def logout_user(response: Response):
+    """
+    Endpoint to log the user out by clearing the cookie.
+    """
+    # Remove the cookie by setting max_age=0 (or expires to a date in the past).
+    response.set_cookie(
+        key="access_token",
+        value="",
+        httponly=True,
+        secure=True,      # same as original settings
+        samesite="none",  # same as original settings
+        path="/",
+        max_age=0         # effectively removes the cookie immediately
+    )
+    return {"message": "User has been logged out."}
 
 
 
