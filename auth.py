@@ -82,7 +82,7 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
     jwt_token = create_jwt_token(user.id)
     
     # Retrieve the "next" URL from the session (or use a default)
-    next_url = request.session.pop("next", "https://your-frontend.com/home")
+    next_url = request.session.pop("next", "http://localhost:3000")
     
     # Prepare a redirect response
     response = RedirectResponse(url=next_url)
