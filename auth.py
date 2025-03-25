@@ -119,7 +119,14 @@ def get_current_user_from_cookie(request: Request, db: Session = Depends(get_db)
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
     
-    return user
+    user_data = {
+        "id": user.id,
+        "fullName": user.fullName,
+        "google_id": user.google_id,
+        "profile_pic": payload.get("pfp")  # "pfp" is included in the JWT token payload
+    }
+    
+    return user_data
 
 @router.get("/me", response_model=UserResponse)
 def read_users_me(current_user: User = Depends(get_current_user_from_cookie)):

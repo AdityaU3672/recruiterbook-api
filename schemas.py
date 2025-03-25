@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List
+from typing import Optional
 
 class UserCreate(BaseModel):
     fullName: str
@@ -8,6 +8,7 @@ class UserCreate(BaseModel):
 class UserResponse(BaseModel):
     id: str
     fullName: str
+    profile_pic: Optional[str] = None
 
 class CompanyCreate(BaseModel):
     name: str
