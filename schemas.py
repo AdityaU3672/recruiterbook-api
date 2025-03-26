@@ -29,6 +29,7 @@ class RecruiterResponse(BaseModel):
     avg_prof: int
     avg_help: int
     avg_final_stage: int
+    verified: bool
     summary: str
 
 class ReviewCreate(BaseModel):
@@ -51,3 +52,10 @@ class ReviewResponse(BaseModel):
     final_stage: int
     upvotes: int
     downvotes: int
+
+class ReviewVoteResponse(BaseModel):
+    id: int
+    review_id: int
+    user_id: str
+    vote: int  # 1 for upvote, -1 for downvote
+

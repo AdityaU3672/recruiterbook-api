@@ -1,6 +1,6 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
-from models import User, Recruiter, Company, Review
+from models import User, Recruiter, Company, Review, ReviewVote
 from schemas import UserCreate, RecruiterCreate, ReviewCreate
 from ai_service import generate_summary
 from google import verify_recruiter
@@ -156,25 +156,75 @@ def get_reviews_by_company(db: Session, company_name: str):
     
     return reviews
 
-def upvote_review(db: Session, review_id: int):
-    """Increase upvote count for a review."""
+def upvote_review(db: Session, review_id: int, user_id: str):
+    """Record an upvote for a review by a given user and update aggregated counts."""
     review = db.query(Review).filter(Review.id == review_id).first()
     if not review:
         return None
-    review.upvotes += 1
-    db.commit()
-    db.refresh(review)
-    return review
+    
+    # Check if the user already voted on this review
+    vote_record = db.query(ReviewVote).filter(
+        ReviewVote.review_id == review_id,
+        ReviewVote.user_id == user_id
+    ).first()
+    
+    if vote_record:
+        if vote_record.vote == 1:
+            # Already upvoted; optionally, you might allow vote removal here.
+            return vote_record
+        else:
+            # Changing vote from downvote (-1) to upvote (+1)
+            vote_record.vote = 1
+            review.downvotes = max(review.downvotes - 1, 0)
+            review.upvotes += 1
+    else:
+        # No vote record exists, create a new upvote record.
+        vote_record = ReviewVote(
+            review_id=review_id,
+            user_id=user_id,
+            vote=1
+        )
+        db.add(vote_record)
+        review.upvotes += 1
 
-def downvote_review(db: Session, review_id: int):
-    """Increase downvote count for a review."""
+    db.commit()
+    db.refresh(vote_record)
+    return vote_record
+
+def downvote_review(db: Session, review_id: int, user_id: str):
+    """Record a downvote for a review by a given user and update aggregated counts."""
     review = db.query(Review).filter(Review.id == review_id).first()
     if not review:
         return None
-    review.downvotes += 1
+    
+    # Check if the user already voted on this review.
+    vote_record = db.query(ReviewVote).filter(
+        ReviewVote.review_id == review_id,
+        ReviewVote.user_id == user_id
+    ).first()
+    
+    if vote_record:
+        if vote_record.vote == -1:
+            # Already downvoted; optionally, allow removal.
+            return vote_record
+        else:
+            # Changing vote from upvote (+1) to downvote (-1)
+            vote_record.vote = -1
+            review.upvotes = max(review.upvotes - 1, 0)
+            review.downvotes += 1
+    else:
+        # No vote record exists, create a new downvote record.
+        vote_record = ReviewVote(
+            review_id=review_id,
+            user_id=user_id,
+            vote=-1
+        )
+        db.add(vote_record)
+        review.downvotes += 1
+
     db.commit()
-    db.refresh(review)
-    return review
+    db.refresh(vote_record)
+    return vote_record
 
 
 

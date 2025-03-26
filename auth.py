@@ -1,5 +1,6 @@
 import os
 from datetime import datetime, timedelta
+from typing import List
 import uuid
 import json
 import jwt
@@ -11,8 +12,8 @@ from dotenv import load_dotenv
 
 from database import SessionLocal
 from crud import get_or_create_user
-from models import User
-from schemas import UserCreate, UserResponse
+from models import User, ReviewVote
+from schemas import ReviewVoteResponse, UserCreate, UserResponse
 
 load_dotenv()
 
@@ -148,6 +149,18 @@ def logout_user(response: Response):
         max_age=0         # effectively removes the cookie immediately
     )
     return {"message": "User has been logged out."}
+
+@router.get("/votes", response_model=List[ReviewVoteResponse])
+def get_user_votes(
+    current_user: dict = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db)
+):
+    """
+    Retrieve all vote records for the currently authenticated user.
+    """
+    user_id = current_user.get("id")
+    votes = db.query(ReviewVote).filter(ReviewVote.user_id == user_id).all()
+    return votes
 
 
 
