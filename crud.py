@@ -47,30 +47,37 @@ def get_or_create_company(db: Session, company_name: str):
 
 # Recruiter creation (ensures no duplicates)
 def get_or_create_recruiter(db: Session, recruiter_data: RecruiterCreate):
+    # Get (or create) the company record.
     company = get_or_create_company(db, recruiter_data.company)
+    
+    # Look up an existing recruiter by fullName and company.
     recruiter = db.query(Recruiter).filter(
         Recruiter.fullName == recruiter_data.fullName,
         Recruiter.company_id == company.id
     ).first()
 
-    # if not verify_recruiter(recruiter_data.fullName, recruiter_data.company):
-    #     raise HTTPException(
-    #         status_code=400,
-    #         detail="Recruiter verification failed. Recruiter does not appear to exist."
-    #     )
-
+    # Determine verification status (True if verified, False otherwise)
+    verified_status = verify_recruiter(recruiter_data.fullName, recruiter_data.company)
+    
+    # If the recruiter doesn't exist, create a new one with the verification status.
     if not recruiter:
         recruiter = Recruiter(
             id=str(uuid.uuid4()),
             fullName=recruiter_data.fullName,
             company_id=company.id,
-            summary=""  # Placeholder for future AI-generated summaries
+            summary="",         # Placeholder for future AI-generated summaries
+            verified=verified_status  # Set verified property based on verification result
         )
         db.add(recruiter)
         db.commit()
         db.refresh(recruiter)
-
+    else:
+        # If recruiter exists, update the verified property
+        recruiter.verified = verified_status
+        db.commit()
+    
     return recruiter
+
 
 # Find recruiters by full name and optional company
 def find_recruiters(db: Session, fullName: str, company: str = None):

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, ForeignKey
+from sqlalchemy import Column, String, Integer, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from database import Base
 
@@ -22,6 +22,7 @@ class Recruiter(Base):
     avg_prof = Column(Integer, default=0)
     avg_help = Column(Integer, default=0)
     avg_final_stage = Column(Integer, default=0)
+    verified = Column(Boolean, default=False)
     summary = Column(String, default="")
     company = relationship("Company")
 
