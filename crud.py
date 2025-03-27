@@ -96,11 +96,11 @@ def post_review(db: Session, review_data: ReviewCreate):
         Review.recruiter_id == review_data.recruiter_id
     ).first()
 
-    if is_profane(review_data.text):  # ✅ Check if review contains profanity
-        return 3 
-
     if existing_review:
-        return 2  # Review already exists
+        raise HTTPException(status_code=400, detail="Review already exists for this recruiter")
+
+    if is_profane(review_data.text):
+        raise HTTPException(status_code=400, detail="Profanity detected in review")
 
     new_review = Review(**review_data.dict())
     db.add(new_review)
@@ -109,18 +109,21 @@ def post_review(db: Session, review_data: ReviewCreate):
 
     # Update recruiter's average ratings
     recruiter = db.query(Recruiter).filter(Recruiter.id == review_data.recruiter_id).first()
+    if not recruiter:
+        raise HTTPException(status_code=404, detail="Recruiter not found")
+
     reviews = db.query(Review).filter(Review.recruiter_id == review_data.recruiter_id).all()
 
     recruiter.avg_resp = sum(r.responsiveness for r in reviews) // len(reviews)
     recruiter.avg_prof = sum(r.professionalism for r in reviews) // len(reviews)
     recruiter.avg_help = sum(r.helpfulness for r in reviews) // len(reviews)
-    recruiter.avg_final_stage = sum(r.final_stage for r in reviews) // len(reviews)  # New calculation
+    recruiter.avg_final_stage = sum(r.final_stage for r in reviews) // len(reviews)
     recruiter.summary = generate_summary(reviews)
-
 
     db.commit()
 
-    return 0  # Success
+    return new_review
+
 
 def get_reviews(db: Session, recruiter_id: str):
     return db.query(Review).filter(Review.recruiter_id == recruiter_id).all()
@@ -160,7 +163,7 @@ def upvote_review(db: Session, review_id: int, user_id: str):
     """Record an upvote for a review by a given user and update aggregated counts."""
     review = db.query(Review).filter(Review.id == review_id).first()
     if not review:
-        return None
+        raise HTTPException(status_code=404, detail="Review not found")
     
     # Check if the user already voted on this review
     vote_record = db.query(ReviewVote).filter(
@@ -168,63 +171,71 @@ def upvote_review(db: Session, review_id: int, user_id: str):
         ReviewVote.user_id == user_id
     ).first()
     
-    if vote_record:
-        if vote_record.vote == 1:
-            # Already upvoted; optionally, you might allow vote removal here.
-            return vote_record
+    try:
+        if vote_record:
+            if vote_record.vote == 1:
+                # Already upvoted
+                return review
+            else:
+                # Changing vote from downvote (-1) to upvote (+1)
+                vote_record.vote = 1
+                review.downvotes = max(review.downvotes - 1, 0)
+                review.upvotes += 1
         else:
-            # Changing vote from downvote (-1) to upvote (+1)
-            vote_record.vote = 1
-            review.downvotes = max(review.downvotes - 1, 0)
+            # No vote record exists, create a new upvote record
+            vote_record = ReviewVote(
+                review_id=review_id,
+                user_id=user_id,
+                vote=1
+            )
+            db.add(vote_record)
             review.upvotes += 1
-    else:
-        # No vote record exists, create a new upvote record.
-        vote_record = ReviewVote(
-            review_id=review_id,
-            user_id=user_id,
-            vote=1
-        )
-        db.add(vote_record)
-        review.upvotes += 1
 
-    db.commit()
-    db.refresh(vote_record)
-    return vote_record
+        db.commit()
+        db.refresh(review)
+        return review
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to process upvote: {str(e)}")
 
 def downvote_review(db: Session, review_id: int, user_id: str):
     """Record a downvote for a review by a given user and update aggregated counts."""
     review = db.query(Review).filter(Review.id == review_id).first()
     if not review:
-        return None
+        raise HTTPException(status_code=404, detail="Review not found")
     
-    # Check if the user already voted on this review.
+    # Check if the user already voted on this review
     vote_record = db.query(ReviewVote).filter(
         ReviewVote.review_id == review_id,
         ReviewVote.user_id == user_id
     ).first()
     
-    if vote_record:
-        if vote_record.vote == -1:
-            # Already downvoted; optionally, allow removal.
-            return vote_record
+    try:
+        if vote_record:
+            if vote_record.vote == -1:
+                # Already downvoted
+                return review
+            else:
+                # Changing vote from upvote (+1) to downvote (-1)
+                vote_record.vote = -1
+                review.upvotes = max(review.upvotes - 1, 0)
+                review.downvotes += 1
         else:
-            # Changing vote from upvote (+1) to downvote (-1)
-            vote_record.vote = -1
-            review.upvotes = max(review.upvotes - 1, 0)
+            # No vote record exists, create a new downvote record
+            vote_record = ReviewVote(
+                review_id=review_id,
+                user_id=user_id,
+                vote=-1
+            )
+            db.add(vote_record)
             review.downvotes += 1
-    else:
-        # No vote record exists, create a new downvote record.
-        vote_record = ReviewVote(
-            review_id=review_id,
-            user_id=user_id,
-            vote=-1
-        )
-        db.add(vote_record)
-        review.downvotes += 1
 
-    db.commit()
-    db.refresh(vote_record)
-    return vote_record
+        db.commit()
+        db.refresh(review)
+        return review
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to process downvote: {str(e)}")
 
 
 

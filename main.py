@@ -7,7 +7,7 @@ from crud import downvote_review, get_or_create_user, get_or_create_recruiter, f
 from schemas import UserCreate, UserResponse, RecruiterCreate, RecruiterResponse, ReviewCreate, ReviewResponse, CompanyResponse
 from typing import List
 import uvicorn
-from auth import router as auth_router
+from auth import get_current_user_from_cookie, router as auth_router
 from starlette.middleware.sessions import SessionMiddleware
 
 if __name__ == "__main__":
@@ -69,13 +69,15 @@ def create_recruiter(recruiter: RecruiterCreate, db: Session = Depends(get_db)):
     return get_or_create_recruiter(db, recruiter)
 
 # Post Review
-@app.post("/review/")
+@app.post("/review/", response_model=ReviewResponse)
 def create_review(review: ReviewCreate, db: Session = Depends(get_db)):
-    status = post_review(db, review)
-    if status == 3:
-        raise HTTPException(status_code=403, detail="Profanity detected in review.")
-    
-    return {"status": status}
+    try:
+        new_review = post_review(db, review)
+        return new_review
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Get Reviews
 @app.get("/reviews/", response_model=List[ReviewResponse])
@@ -100,16 +102,26 @@ def get_all_reviews_endpoint(db: Session = Depends(get_db)):
     return reviews
 
 @app.post("/review/upvote/{review_id}")
-def upvote(review_id: int, db: Session = Depends(get_db)):
-    review = upvote_review(db, review_id)
-    if not review:
-        raise HTTPException(status_code=404, detail="Review not found")
-    return {"message": "Upvote added", "upvotes": review.upvotes}
+def upvote(review_id: int, user_id: str, db: Session = Depends(get_db)):
+    try:
+        review = upvote_review(db, review_id, user_id)
+        if not review:
+            raise HTTPException(status_code=404, detail="Review not found")
+        return {"message": "Upvote added", "upvotes": review.upvotes}
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/review/downvote/{review_id}")
-def downvote(review_id: int, db: Session = Depends(get_db)):
-    review = downvote_review(db, review_id)
-    if not review:
-        raise HTTPException(status_code=404, detail="Review not found")
-    return {"message": "Downvote added", "downvotes": review.downvotes}
+def downvote(review_id: int, user_id: str, db: Session = Depends(get_db)):
+    try:
+        review = downvote_review(db, review_id, user_id)
+        if not review:
+            raise HTTPException(status_code=404, detail="Review not found")
+        return {"message": "Downvote added", "downvotes": review.downvotes}
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
