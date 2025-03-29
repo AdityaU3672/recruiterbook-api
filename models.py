@@ -40,7 +40,7 @@ class Review(Base):
     final_stage = Column(Integer)
     upvotes = Column(Integer, default=0)  
     downvotes = Column(Integer, default=0)  
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=True, default=datetime.utcnow)
 
     user = relationship("User")
     recruiter = relationship("Recruiter")

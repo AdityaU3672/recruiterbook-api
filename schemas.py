@@ -52,7 +52,7 @@ class ReviewResponse(BaseModel):
     final_stage: int
     upvotes: int
     downvotes: int
-    created_at: datetime
+    created_at: Optional[datetime] = None
 
 class ReviewVoteResponse(BaseModel):
     id: int
