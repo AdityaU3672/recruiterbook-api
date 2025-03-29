@@ -1,5 +1,5 @@
-from pydantic import BaseModel
-from typing import Optional
+from pydantic import BaseModel, field_validator
+from typing import Optional, Union, Any
 from datetime import datetime
 
 class UserCreate(BaseModel):
@@ -52,8 +52,15 @@ class ReviewResponse(BaseModel):
     final_stage: int
     upvotes: int
     downvotes: int
-    created_at: Optional[int] = None  # Unix timestamp
-    updated_at: Optional[int] = None  # Unix timestamp
+    created_at: Optional[Any] = None
+    updated_at: Optional[Any] = None
+    
+    @field_validator('created_at', 'updated_at')
+    @classmethod
+    def validate_timestamp(cls, v):
+        if isinstance(v, datetime):
+            return int(v.timestamp())
+        return v
 
 class ReviewVoteResponse(BaseModel):
     id: int

@@ -47,6 +47,27 @@ class Review(Base):
     recruiter = relationship("Recruiter")
     votes = relationship("ReviewVote", back_populates="review")
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if not self.created_at:
+            self.created_at = int(datetime.utcnow().timestamp())
+        if not self.updated_at:
+            self.updated_at = int(datetime.utcnow().timestamp())
+
+    @property
+    def created_at_datetime(self):
+        """Convert Unix timestamp to datetime object."""
+        if self.created_at:
+            return datetime.fromtimestamp(self.created_at)
+        return None
+
+    @property
+    def updated_at_datetime(self):
+        """Convert Unix timestamp to datetime object."""
+        if self.updated_at:
+            return datetime.fromtimestamp(self.updated_at)
+        return None
+
 class ReviewVote(Base):
     __tablename__ = "review_votes"
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
