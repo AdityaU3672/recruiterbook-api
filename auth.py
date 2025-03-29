@@ -172,7 +172,8 @@ def logout_user(response: Response, request: Request):
         secure=True,
         samesite="none" if is_production else "lax",  # Use "none" for production, "lax" for development
         path="/",
-        max_age=0         # effectively removes the cookie immediately
+        max_age=0,         # effectively removes the cookie immediately
+        domain=".recruiterbook.0x0.lat" if is_production else None  # Set domain for production
     )
     return {"message": "User has been logged out."}
 
