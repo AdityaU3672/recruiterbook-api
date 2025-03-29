@@ -17,7 +17,7 @@ def generate_summary(reviews):
         prompt += f"- {review.text}\n"
 
     response = client.chat.completions.create(
-        model="o3-mini",
+        model="gpt-3.5-turbo",
         messages=[
             {"role": "system", "content": "You are an AI that summarizes recruiter reviews."},
             {"role": "user", "content": prompt}
