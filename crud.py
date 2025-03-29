@@ -237,5 +237,24 @@ def downvote_review(db: Session, review_id: int, user_id: str):
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to process downvote: {str(e)}")
 
+def get_reviews_by_user(db: Session, user_id: str):
+    """Retrieve all reviews written by a specific user."""
+    return db.query(Review).filter(Review.user_id == user_id).all()
+
+def get_user_helpfulness_score(db: Session, user_id: str):
+    """Calculate a user's helpfulness score based on received upvotes and downvotes."""
+    # Get all reviews by the user
+    user_reviews = db.query(Review).filter(Review.user_id == user_id).all()
+    
+    # Calculate total upvotes and downvotes
+    total_upvotes = sum(review.upvotes for review in user_reviews)
+    total_downvotes = sum(review.downvotes for review in user_reviews)
+    
+    return {
+        "total_upvotes": total_upvotes,
+        "total_downvotes": total_downvotes,
+        "helpfulness_score": total_upvotes - total_downvotes
+    }
+
 
 

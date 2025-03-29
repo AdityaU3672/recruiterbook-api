@@ -43,7 +43,6 @@ class ReviewCreate(BaseModel):
 
 class ReviewResponse(BaseModel):
     id: int
-    user_id: str
     recruiter_id: str
     professionalism: int
     responsiveness: int
@@ -56,6 +55,10 @@ class ReviewResponse(BaseModel):
 class ReviewVoteResponse(BaseModel):
     id: int
     review_id: int
-    user_id: str
     vote: int  # 1 for upvote, -1 for downvote
+
+class HelpfulnessScore(BaseModel):
+    total_upvotes: int
+    total_downvotes: int
+    helpfulness_score: int
 

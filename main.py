@@ -3,8 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from sqlalchemy.orm import Session
 from database import SessionLocal, engine, Base
-from crud import downvote_review, get_or_create_user, get_or_create_recruiter, find_recruiters, get_reviews_by_company, post_review, get_reviews, get_companies, get_recruiter_by_id, delete_company_by_name, get_all_reviews, upvote_review
-from schemas import UserCreate, UserResponse, RecruiterCreate, RecruiterResponse, ReviewCreate, ReviewResponse, CompanyResponse
+from crud import downvote_review, get_or_create_user, get_or_create_recruiter, find_recruiters, get_reviews_by_company, post_review, get_reviews, get_companies, get_recruiter_by_id, delete_company_by_name, get_all_reviews, upvote_review, get_reviews_by_user, get_user_helpfulness_score
+from schemas import UserCreate, UserResponse, RecruiterCreate, RecruiterResponse, ReviewCreate, ReviewResponse, CompanyResponse, HelpfulnessScore
 from typing import List
 import uvicorn
 from auth import get_current_user_from_cookie, router as auth_router
@@ -124,4 +124,27 @@ def downvote(review_id: int, user_id: str, db: Session = Depends(get_db)):
         raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/profile/reviews/", response_model=List[ReviewResponse])
+def get_user_reviews(
+    current_user: dict = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db)
+):
+    """
+    Retrieve all reviews written by the currently authenticated user.
+    """
+    user_id = current_user.get("id")
+    return get_reviews_by_user(db, user_id)
+
+@app.get("/profile/helpfulness/", response_model=HelpfulnessScore)
+def get_user_helpfulness(
+    current_user: dict = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db)
+):
+    """
+    Get the helpfulness score for the currently authenticated user.
+    Returns total upvotes, downvotes, and the overall helpfulness score.
+    """
+    user_id = current_user.get("id")
+    return get_user_helpfulness_score(db, user_id)
 

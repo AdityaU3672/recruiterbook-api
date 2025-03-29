@@ -87,23 +87,46 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
     # Retrieve the "next" URL from the session (or use a default)
     next_url = request.session.pop("next", "http://localhost:3000")
     
+    # Log request details for debugging
+    print(f"Callback request headers: {dict(request.headers)}")
+    print(f"Callback request cookies: {dict(request.cookies)}")
+    print(f"Next URL: {next_url}")
+    
     # Prepare a redirect response
     response = RedirectResponse(url=next_url)
-    response.set_cookie(
-        key="access_token",
-        value=jwt_token,
-        httponly=True,
-        secure=True,
-        samesite="none",     # Required for cross-site requests
-        path="/",            # Make cookie available for all paths
-        max_age=JWT_EXPIRES_MINUTES * 60
-    )
+    
+    # Determine if we're in production based on the next_url
+    is_production = "recruiterbook.0x0.lat" in next_url
+    print(f"Is production: {is_production}")
+    
+    # Set cookie with domain for production
+    cookie_settings = {
+        "key": "access_token",
+        "value": jwt_token,
+        "httponly": True,
+        "secure": True,
+        "samesite": "none" if is_production else "lax",
+        "path": "/",
+        "max_age": JWT_EXPIRES_MINUTES * 60
+    }
+    
+    # Add domain in production
+    if is_production:
+        cookie_settings["domain"] = ".recruiterbook.0x0.lat"  # Note the leading dot for subdomains
+    
+    print(f"Cookie settings: {cookie_settings}")
+    response.set_cookie(**cookie_settings)
     
     return response
 
 def get_current_user_from_cookie(request: Request, db: Session = Depends(get_db)):
+    # Log request details for debugging
+    print(f"Auth check headers: {dict(request.headers)}")
+    print(f"Auth check cookies: {dict(request.cookies)}")
+    
     token = request.cookies.get("access_token")
     if not token:
+        print("No access_token cookie found")
         raise HTTPException(status_code=401, detail="Not authenticated")
     try:
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=["HS256"])
@@ -134,17 +157,20 @@ def read_users_me(current_user: User = Depends(get_current_user_from_cookie)):
     return current_user
 
 @router.post("/logout")
-def logout_user(response: Response):
+def logout_user(response: Response, request: Request):
     """
     Endpoint to log the user out by clearing the cookie.
     """
+    # Determine if we're in production based on the request origin
+    is_production = "recruiterbook.0x0.lat" in request.headers.get("origin", "")
+    
     # Remove the cookie by setting max_age=0 (or expires to a date in the past).
     response.set_cookie(
         key="access_token",
         value="",
         httponly=True,
-        secure=True,      # same as original settings
-        samesite="none",  # same as original settings
+        secure=True,
+        samesite="none" if is_production else "lax",  # Use "none" for production, "lax" for development
         path="/",
         max_age=0         # effectively removes the cookie immediately
     )
