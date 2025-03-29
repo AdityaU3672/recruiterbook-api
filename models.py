@@ -40,8 +40,8 @@ class Review(Base):
     final_stage = Column(Integer)
     upvotes = Column(Integer, default=0)  
     downvotes = Column(Integer, default=0)  
-    created_at = Column(DateTime, nullable=True, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=True, onupdate=datetime.utcnow)
+    created_at = Column(Integer, nullable=True, default=lambda: int(datetime.utcnow().timestamp()))
+    updated_at = Column(Integer, nullable=True, onupdate=lambda: int(datetime.utcnow().timestamp()))
 
     user = relationship("User")
     recruiter = relationship("Recruiter")

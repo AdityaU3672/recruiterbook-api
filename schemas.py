@@ -52,8 +52,8 @@ class ReviewResponse(BaseModel):
     final_stage: int
     upvotes: int
     downvotes: int
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    created_at: Optional[int] = None  # Unix timestamp
+    updated_at: Optional[int] = None  # Unix timestamp
 
 class ReviewVoteResponse(BaseModel):
     id: int

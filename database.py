@@ -38,14 +38,14 @@ def add_created_at_column():
             # Add created_at column if it doesn't exist
             connection.execute(text("""
                 ALTER TABLE reviews 
-                ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                ADD COLUMN created_at INTEGER DEFAULT EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)::INTEGER
             """))
         
         if 'updated_at' not in existing_columns:
             # Add updated_at column if it doesn't exist
             connection.execute(text("""
                 ALTER TABLE reviews 
-                ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                ADD COLUMN updated_at INTEGER DEFAULT EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)::INTEGER
             """))
         
         connection.commit()
