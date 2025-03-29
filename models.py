@@ -1,6 +1,7 @@
-from sqlalchemy import Column, String, Integer, ForeignKey, Boolean
+from sqlalchemy import Column, String, Integer, ForeignKey, Boolean, DateTime
 from sqlalchemy.orm import relationship
 from database import Base
+from datetime import datetime
 
 class User(Base):
     __tablename__ = "users"
@@ -39,6 +40,7 @@ class Review(Base):
     final_stage = Column(Integer)
     upvotes = Column(Integer, default=0)  
     downvotes = Column(Integer, default=0)  
+    created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User")
     recruiter = relationship("Recruiter")

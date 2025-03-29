@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional
+from datetime import datetime
 
 class UserCreate(BaseModel):
     fullName: str
@@ -51,6 +52,7 @@ class ReviewResponse(BaseModel):
     final_stage: int
     upvotes: int
     downvotes: int
+    created_at: datetime
 
 class ReviewVoteResponse(BaseModel):
     id: int
