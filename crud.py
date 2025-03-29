@@ -183,8 +183,9 @@ def upvote_review(db: Session, review_id: int, user_id: str):
     try:
         if vote_record:
             if vote_record.vote == 1:
-                # Already upvoted
-                return review
+                # Already upvoted - clear the vote
+                db.delete(vote_record)
+                review.upvotes = max(review.upvotes - 1, 0)
             else:
                 # Changing vote from downvote (-1) to upvote (+1)
                 vote_record.vote = 1
@@ -222,8 +223,9 @@ def downvote_review(db: Session, review_id: int, user_id: str):
     try:
         if vote_record:
             if vote_record.vote == -1:
-                # Already downvoted
-                return review
+                # Already downvoted - clear the vote
+                db.delete(vote_record)
+                review.downvotes = max(review.downvotes - 1, 0)
             else:
                 # Changing vote from upvote (+1) to downvote (-1)
                 vote_record.vote = -1

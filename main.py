@@ -104,10 +104,19 @@ def get_all_reviews_endpoint(db: Session = Depends(get_db)):
 @app.post("/review/upvote/{review_id}")
 def upvote(review_id: int, user_id: str, db: Session = Depends(get_db)):
     try:
-        review = upvote_review(db, review_id, user_id)
-        if not review:
+        original_review = db.query(Review).filter(Review.id == review_id).first()
+        if not original_review:
             raise HTTPException(status_code=404, detail="Review not found")
-        return {"message": "Upvote added", "upvotes": review.upvotes}
+        
+        original_upvotes = original_review.upvotes
+        
+        review = upvote_review(db, review_id, user_id)
+        
+        # Determine if an upvote was added or removed
+        if review.upvotes > original_upvotes:
+            return {"message": "Upvote added", "upvotes": review.upvotes}
+        else:
+            return {"message": "Upvote removed", "upvotes": review.upvotes}
     except HTTPException as e:
         raise e
     except Exception as e:
@@ -116,10 +125,19 @@ def upvote(review_id: int, user_id: str, db: Session = Depends(get_db)):
 @app.post("/review/downvote/{review_id}")
 def downvote(review_id: int, user_id: str, db: Session = Depends(get_db)):
     try:
-        review = downvote_review(db, review_id, user_id)
-        if not review:
+        original_review = db.query(Review).filter(Review.id == review_id).first()
+        if not original_review:
             raise HTTPException(status_code=404, detail="Review not found")
-        return {"message": "Downvote added", "downvotes": review.downvotes}
+        
+        original_downvotes = original_review.downvotes
+        
+        review = downvote_review(db, review_id, user_id)
+        
+        # Determine if a downvote was added or removed
+        if review.downvotes > original_downvotes:
+            return {"message": "Downvote added", "downvotes": review.downvotes}
+        else:
+            return {"message": "Downvote removed", "downvotes": review.downvotes}
     except HTTPException as e:
         raise e
     except Exception as e:
