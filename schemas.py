@@ -58,9 +58,21 @@ class ReviewResponse(BaseModel):
     @field_validator('created_at', 'updated_at')
     @classmethod
     def validate_timestamp(cls, v):
+        if v is None:
+            return None
         if isinstance(v, datetime):
             return int(v.timestamp())
-        return v
+        if isinstance(v, int):
+            return v
+        # For any other type, try to convert to int or return None
+        try:
+            return int(v)
+        except (ValueError, TypeError):
+            return None
+        
+    class Config:
+        from_attributes = True
+        arbitrary_types_allowed = True
 
 class ReviewVoteResponse(BaseModel):
     id: int

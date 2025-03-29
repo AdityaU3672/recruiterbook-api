@@ -40,8 +40,8 @@ class Review(Base):
     final_stage = Column(Integer)
     upvotes = Column(Integer, default=0)  
     downvotes = Column(Integer, default=0)  
-    created_at = Column(Integer, nullable=True, default=lambda: int(datetime.utcnow().timestamp()))
-    updated_at = Column(Integer, nullable=True, onupdate=lambda: int(datetime.utcnow().timestamp()))
+    created_at = Column(DateTime, nullable=True, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=True, onupdate=datetime.utcnow)
 
     user = relationship("User")
     recruiter = relationship("Recruiter")
@@ -50,22 +50,22 @@ class Review(Base):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         if not self.created_at:
-            self.created_at = int(datetime.utcnow().timestamp())
+            self.created_at = datetime.utcnow()
         if not self.updated_at:
-            self.updated_at = int(datetime.utcnow().timestamp())
+            self.updated_at = datetime.utcnow()
 
     @property
     def created_at_datetime(self):
         """Convert Unix timestamp to datetime object."""
         if self.created_at:
-            return datetime.fromtimestamp(self.created_at)
+            return self.created_at
         return None
 
     @property
     def updated_at_datetime(self):
         """Convert Unix timestamp to datetime object."""
         if self.updated_at:
-            return datetime.fromtimestamp(self.updated_at)
+            return self.updated_at
         return None
 
 class ReviewVote(Base):
