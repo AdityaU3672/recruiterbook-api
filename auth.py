@@ -177,7 +177,7 @@ def logout_user(response: Response, request: Request):
     )
     return {"message": "User has been logged out."}
 
-@router.get("/votes", response_model=List[ReviewVoteResponse])
+@router.get("/votes/", response_model=List[ReviewVoteResponse])
 def get_user_votes(
     current_user: dict = Depends(get_current_user_from_cookie),
     db: Session = Depends(get_db)
