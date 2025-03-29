@@ -53,6 +53,7 @@ class ReviewResponse(BaseModel):
     upvotes: int
     downvotes: int
     created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 class ReviewVoteResponse(BaseModel):
     id: int
@@ -63,4 +64,11 @@ class HelpfulnessScore(BaseModel):
     total_upvotes: int
     total_downvotes: int
     helpfulness_score: int
+
+class ReviewUpdate(BaseModel):
+    professionalism: Optional[int] = None
+    responsiveness: Optional[int] = None
+    helpfulness: Optional[int] = None
+    text: Optional[str] = None
+    final_stage: Optional[int] = None
 

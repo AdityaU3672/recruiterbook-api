@@ -1,7 +1,7 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from models import User, Recruiter, Company, Review, ReviewVote
-from schemas import UserCreate, RecruiterCreate, ReviewCreate
+from schemas import UserCreate, RecruiterCreate, ReviewCreate, ReviewUpdate
 from ai_service import generate_summary
 from google import verify_recruiter
 import uuid
@@ -264,6 +264,76 @@ def get_user_helpfulness_score(db: Session, user_id: str):
         "total_downvotes": total_downvotes,
         "helpfulness_score": total_upvotes - total_downvotes
     }
+
+def update_review(db: Session, review_id: int, user_id: str, review_data: ReviewUpdate):
+    """Update a review by its ID and user ID."""
+    review = db.query(Review).filter(
+        Review.id == review_id,
+        Review.user_id == user_id
+    ).first()
+    
+    if not review:
+        raise HTTPException(status_code=404, detail="Review not found or unauthorized")
+    
+    # Update only the fields that were provided
+    update_data = review_data.dict(exclude_unset=True)
+    if "text" in update_data:
+        update_data["text"] = is_profane(update_data["text"])
+    
+    for field, value in update_data.items():
+        setattr(review, field, value)
+    
+    db.commit()
+    db.refresh(review)
+    
+    # Update recruiter's average ratings
+    recruiter = review.recruiter
+    reviews = db.query(Review).filter(Review.recruiter_id == recruiter.id).all()
+    
+    recruiter.avg_resp = sum(r.responsiveness for r in reviews) // len(reviews)
+    recruiter.avg_prof = sum(r.professionalism for r in reviews) // len(reviews)
+    recruiter.avg_help = sum(r.helpfulness for r in reviews) // len(reviews)
+    recruiter.avg_final_stage = sum(r.final_stage for r in reviews) // len(reviews)
+    recruiter.summary = generate_summary(reviews)
+    
+    db.commit()
+    return review
+
+def delete_review(db: Session, review_id: int, user_id: str):
+    """Delete a review by its ID and user ID."""
+    review = db.query(Review).filter(
+        Review.id == review_id,
+        Review.user_id == user_id
+    ).first()
+    
+    if not review:
+        raise HTTPException(status_code=404, detail="Review not found or unauthorized")
+    
+    recruiter_id = review.recruiter_id
+    db.delete(review)
+    db.commit()
+    
+    # Update recruiter's average ratings
+    recruiter = db.query(Recruiter).filter(Recruiter.id == recruiter_id).first()
+    if recruiter:
+        reviews = db.query(Review).filter(Review.recruiter_id == recruiter_id).all()
+        if reviews:
+            recruiter.avg_resp = sum(r.responsiveness for r in reviews) // len(reviews)
+            recruiter.avg_prof = sum(r.professionalism for r in reviews) // len(reviews)
+            recruiter.avg_help = sum(r.helpfulness for r in reviews) // len(reviews)
+            recruiter.avg_final_stage = sum(r.final_stage for r in reviews) // len(reviews)
+            recruiter.summary = generate_summary(reviews)
+        else:
+            # If no reviews left, reset averages to 0
+            recruiter.avg_resp = 0
+            recruiter.avg_prof = 0
+            recruiter.avg_help = 0
+            recruiter.avg_final_stage = 0
+            recruiter.summary = "No reviews available."
+        
+        db.commit()
+    
+    return {"message": "Review deleted successfully"}
 
 
 

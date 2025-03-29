@@ -3,8 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from sqlalchemy.orm import Session
 from database import SessionLocal, engine, Base
-from crud import downvote_review, get_or_create_user, get_or_create_recruiter, find_recruiters, get_reviews_by_company, post_review, get_reviews, get_companies, get_recruiter_by_id, delete_company_by_name, get_all_reviews, upvote_review, get_reviews_by_user, get_user_helpfulness_score
-from schemas import UserCreate, UserResponse, RecruiterCreate, RecruiterResponse, ReviewCreate, ReviewResponse, CompanyResponse, HelpfulnessScore
+from crud import downvote_review, get_or_create_user, get_or_create_recruiter, find_recruiters, get_reviews_by_company, post_review, get_reviews, get_companies, get_recruiter_by_id, delete_company_by_name, get_all_reviews, upvote_review, get_reviews_by_user, get_user_helpfulness_score, update_review, delete_review
+from schemas import UserCreate, UserResponse, RecruiterCreate, RecruiterResponse, ReviewCreate, ReviewResponse, CompanyResponse, HelpfulnessScore, ReviewUpdate
 from typing import List
 import uvicorn
 from auth import get_current_user_from_cookie, router as auth_router
@@ -147,4 +147,40 @@ def get_user_helpfulness(
     """
     user_id = current_user.get("id")
     return get_user_helpfulness_score(db, user_id)
+
+@app.put("/review/{review_id}/", response_model=ReviewResponse)
+def edit_review(
+    review_id: int,
+    review_data: ReviewUpdate,
+    current_user: dict = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db)
+):
+    """
+    Edit a review. Only the review author can edit their own review.
+    """
+    try:
+        user_id = current_user.get("id")
+        updated_review = update_review(db, review_id, user_id, review_data)
+        return updated_review
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/review/{review_id}/")
+def remove_review(
+    review_id: int,
+    current_user: dict = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db)
+):
+    """
+    Delete a review. Only the review author can delete their own review.
+    """
+    try:
+        user_id = current_user.get("id")
+        return delete_review(db, review_id, user_id)
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 

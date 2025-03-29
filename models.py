@@ -41,6 +41,7 @@ class Review(Base):
     upvotes = Column(Integer, default=0)  
     downvotes = Column(Integer, default=0)  
     created_at = Column(DateTime, nullable=True, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=True, onupdate=datetime.utcnow)
 
     user = relationship("User")
     recruiter = relationship("Recruiter")
