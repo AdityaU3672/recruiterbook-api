@@ -22,22 +22,33 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 def add_created_at_column():
-    """Add created_at column to reviews table if it doesn't exist."""
+    """Add created_at and updated_at columns to reviews table if they don't exist."""
     with engine.connect() as connection:
-        # Check if column exists
+        # Check if columns exist
         result = connection.execute(text("""
             SELECT column_name 
             FROM information_schema.columns 
-            WHERE table_name = 'reviews' AND column_name = 'created_at'
+            WHERE table_name = 'reviews' 
+            AND column_name IN ('created_at', 'updated_at')
         """))
         
-        if not result.fetchone():
-            # Add the column if it doesn't exist
+        existing_columns = {row[0] for row in result}
+        
+        if 'created_at' not in existing_columns:
+            # Add created_at column if it doesn't exist
             connection.execute(text("""
                 ALTER TABLE reviews 
                 ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             """))
-            connection.commit()
+        
+        if 'updated_at' not in existing_columns:
+            # Add updated_at column if it doesn't exist
+            connection.execute(text("""
+                ALTER TABLE reviews 
+                ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            """))
+        
+        connection.commit()
 
 # Call this function when the application starts
 add_created_at_column()
