@@ -97,7 +97,7 @@ def post_review(db: Session, review_data: ReviewCreate):
     ).first()
 
     if existing_review:
-        raise HTTPException(status_code=400, detail="Review already exists for this recruiter")
+        raise HTTPException(status_code=400, detail="Review already exists for this recruiter") 
 
     # Censor any profane words in the review text
     censored_text = is_profane(review_data.text)
@@ -147,8 +147,13 @@ def delete_company_by_name(db: Session, company_name: str):
     return company
 
 def is_profane(text):
-    """Censor profane words in text with asterisks."""
+    """Censor profane words in text with asterisks matching the length of the word."""
     profanity.load_censor_words()  # Load default profanity list
+    
+    def custom_censor(word):
+        return '*' * len(word)
+    
+    profanity.censor_words = custom_censor
     return profanity.censor(text)  # Returns text with profane words censored
 
 def get_reviews_by_company(db: Session, company_name: str):
