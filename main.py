@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from sqlalchemy.orm import Session
@@ -9,11 +9,40 @@ from typing import List
 import uvicorn
 from auth import get_current_user_from_cookie, router as auth_router
 from starlette.middleware.sessions import SessionMiddleware
+import os
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+import secrets
+from models import Review
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8080)
 
-app = FastAPI()
+# Set up HTTP Basic Auth
+security = HTTPBasic()
+
+def get_docs_credentials(credentials: HTTPBasicCredentials = Depends(security)):
+    # Get credentials from environment variables or use defaults in development
+    correct_username = os.getenv("DOCS_USERNAME", "recruiterbook")
+    correct_password = os.getenv("DOCS_PASSWORD", "docspassword")
+    
+    is_correct_username = secrets.compare_digest(credentials.username, correct_username)
+    is_correct_password = secrets.compare_digest(credentials.password, correct_password)
+    
+    if not (is_correct_username and is_correct_password):
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    
+    return credentials.username
+
+# Initialize FastAPI with docs security
+app = FastAPI(
+    docs_url="/docs",
+    redoc_url="/redoc",
+    dependencies=[Depends(get_docs_credentials)] if os.getenv("ENVIRONMENT", "development") == "production" else None
+)
 
 app.add_middleware(
     CORSMiddleware,

@@ -10,3 +10,4 @@ authlib
 PyJWT
 itsdangerous
 psycopg2-binary
+python-multipart
