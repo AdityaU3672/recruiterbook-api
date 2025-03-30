@@ -71,9 +71,18 @@ def create_recruiter(recruiter: RecruiterCreate, db: Session = Depends(get_db)):
 
 # Post Review
 @app.post("/review/", response_model=ReviewResponse)
-def create_review(review: ReviewCreate, db: Session = Depends(get_db)):
+def create_review(
+    review: ReviewCreate, 
+    current_user: dict = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db)
+):
     try:
-        new_review = post_review(db, review)
+        # Set the user_id from the authenticated user
+        review_data = review.dict()
+        review_data["user_id"] = current_user.get("id")
+        review_obj = ReviewCreate(**review_data)
+        
+        new_review = post_review(db, review_obj)
         return new_review
     except HTTPException as e:
         raise e
@@ -103,7 +112,11 @@ def get_all_reviews_endpoint(db: Session = Depends(get_db)):
     return reviews
 
 @app.post("/review/upvote/{review_id}")
-def upvote(review_id: int, user_id: str, db: Session = Depends(get_db)):
+def upvote(
+    review_id: int, 
+    current_user: dict = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db)
+):
     try:
         original_review = db.query(Review).filter(Review.id == review_id).first()
         if not original_review:
@@ -111,6 +124,7 @@ def upvote(review_id: int, user_id: str, db: Session = Depends(get_db)):
         
         original_upvotes = original_review.upvotes
         
+        user_id = current_user.get("id")
         review = upvote_review(db, review_id, user_id)
         
         # Determine if an upvote was added or removed
@@ -124,7 +138,11 @@ def upvote(review_id: int, user_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/review/downvote/{review_id}")
-def downvote(review_id: int, user_id: str, db: Session = Depends(get_db)):
+def downvote(
+    review_id: int,
+    current_user: dict = Depends(get_current_user_from_cookie),
+    db: Session = Depends(get_db)
+):
     try:
         original_review = db.query(Review).filter(Review.id == review_id).first()
         if not original_review:
@@ -132,6 +150,7 @@ def downvote(review_id: int, user_id: str, db: Session = Depends(get_db)):
         
         original_downvotes = original_review.downvotes
         
+        user_id = current_user.get("id")
         review = downvote_review(db, review_id, user_id)
         
         # Determine if a downvote was added or removed

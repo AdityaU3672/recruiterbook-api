@@ -34,7 +34,7 @@ class RecruiterResponse(BaseModel):
     summary: str
 
 class ReviewCreate(BaseModel):
-    user_id: str
+    user_id: Optional[str] = None
     recruiter_id: str
     professionalism: int
     responsiveness: int
