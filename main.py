@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from database import SessionLocal, engine, Base
 from crud import downvote_review, get_or_create_user, get_or_create_recruiter, find_recruiters, get_reviews_by_company, post_review, get_reviews, get_companies, get_recruiter_by_id, delete_company_by_name, get_all_reviews, upvote_review, get_reviews_by_user, get_user_helpfulness_score, update_review, delete_review
 from schemas import UserCreate, UserResponse, RecruiterCreate, RecruiterResponse, ReviewCreate, ReviewResponse, CompanyResponse, HelpfulnessScore, ReviewUpdate
+from models import Review
 from typing import List
 import uvicorn
 from auth import get_current_user_from_cookie, router as auth_router
