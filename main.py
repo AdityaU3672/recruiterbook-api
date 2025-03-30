@@ -1,70 +1,19 @@
-from fastapi import FastAPI, Depends, HTTPException, Security
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from sqlalchemy.orm import Session
 from database import SessionLocal, engine, Base
 from crud import downvote_review, get_or_create_user, get_or_create_recruiter, find_recruiters, get_reviews_by_company, post_review, get_reviews, get_companies, get_recruiter_by_id, delete_company_by_name, get_all_reviews, upvote_review, get_reviews_by_user, get_user_helpfulness_score, update_review, delete_review
 from schemas import UserCreate, UserResponse, RecruiterCreate, RecruiterResponse, ReviewCreate, ReviewResponse, CompanyResponse, HelpfulnessScore, ReviewUpdate
-from typing import List, Union
+from typing import List
 import uvicorn
-from auth import get_current_user_from_cookie, get_current_user_from_token, router as auth_router
+from auth import get_current_user_from_cookie, router as auth_router
 from starlette.middleware.sessions import SessionMiddleware
-import os
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
-import secrets
-from models import Review
-from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
-from fastapi.openapi.utils import get_openapi
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8080)
 
-# Set up HTTP Basic Auth
-security = HTTPBasic()
-
-def get_docs_credentials(credentials: HTTPBasicCredentials = Depends(security)):
-    # Get credentials from environment variables or use defaults in development
-    correct_username = os.getenv("DOCS_USERNAME", "recruiterbook")
-    correct_password = os.getenv("DOCS_PASSWORD", "docspassword")
-    
-    is_correct_username = secrets.compare_digest(credentials.username, correct_username)
-    is_correct_password = secrets.compare_digest(credentials.password, correct_password)
-    
-    if not (is_correct_username and is_correct_password):
-        raise HTTPException(
-            status_code=401,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Basic"},
-        )
-    
-    return credentials.username
-
-# Helper function to get user from either cookie or token
-def get_current_user(
-    cookie_user = Depends(get_current_user_from_cookie, use_cache=False),
-    token_user = Depends(get_current_user_from_token, use_cache=False)
-):
-    """
-    Tries to get the user from either cookie or token.
-    Gives priority to token if both are present.
-    """
-    # If token authentication worked, use that
-    if token_user:
-        return token_user
-    
-    # Otherwise try cookie authentication
-    if cookie_user:
-        return cookie_user
-    
-    # If neither method worked, raise an error
-    raise HTTPException(
-        status_code=401,
-        detail="Not authenticated. Please login first.",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-
-# Initialize FastAPI without docs - we'll add custom protected docs routes below
-app = FastAPI(docs_url=None, redoc_url=None)
+app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
@@ -86,19 +35,6 @@ def get_db():
         yield db
     finally:
         db.close()
-
-# Add custom protected routes for documentation
-@app.get("/docs", include_in_schema=False)
-async def get_protected_docs(username: str = Depends(get_docs_credentials)):
-    return get_swagger_ui_html(openapi_url="/openapi.json", title="API Documentation")
-
-@app.get("/openapi.json", include_in_schema=False)
-async def get_openapi_schema(username: str = Depends(get_docs_credentials)):
-    return get_openapi(title="RecruiterBook API", version="1.0.0", routes=app.routes)
-
-@app.get("/redoc", include_in_schema=False)
-async def get_protected_redoc(username: str = Depends(get_docs_credentials)):
-    return get_redoc_html(openapi_url="/openapi.json", title="API Documentation")
 
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
 
@@ -134,10 +70,8 @@ def create_recruiter(recruiter: RecruiterCreate, db: Session = Depends(get_db)):
 
 # Post Review
 @app.post("/review/", response_model=ReviewResponse)
-def create_review(review: ReviewCreate, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+def create_review(review: ReviewCreate, db: Session = Depends(get_db)):
     try:
-        # Set the user_id from the authenticated user
-        review.user_id = current_user.get("id")
         new_review = post_review(db, review)
         return new_review
     except HTTPException as e:
@@ -168,7 +102,7 @@ def get_all_reviews_endpoint(db: Session = Depends(get_db)):
     return reviews
 
 @app.post("/review/upvote/{review_id}")
-def upvote(review_id: int, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+def upvote(review_id: int, user_id: str, db: Session = Depends(get_db)):
     try:
         original_review = db.query(Review).filter(Review.id == review_id).first()
         if not original_review:
@@ -176,8 +110,6 @@ def upvote(review_id: int, current_user: dict = Depends(get_current_user), db: S
         
         original_upvotes = original_review.upvotes
         
-        # Use the user_id from the authenticated user
-        user_id = current_user.get("id")
         review = upvote_review(db, review_id, user_id)
         
         # Determine if an upvote was added or removed
@@ -191,7 +123,7 @@ def upvote(review_id: int, current_user: dict = Depends(get_current_user), db: S
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/review/downvote/{review_id}")
-def downvote(review_id: int, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+def downvote(review_id: int, user_id: str, db: Session = Depends(get_db)):
     try:
         original_review = db.query(Review).filter(Review.id == review_id).first()
         if not original_review:
@@ -199,8 +131,6 @@ def downvote(review_id: int, current_user: dict = Depends(get_current_user), db:
         
         original_downvotes = original_review.downvotes
         
-        # Use the user_id from the authenticated user
-        user_id = current_user.get("id")
         review = downvote_review(db, review_id, user_id)
         
         # Determine if a downvote was added or removed
@@ -215,7 +145,7 @@ def downvote(review_id: int, current_user: dict = Depends(get_current_user), db:
 
 @app.get("/profile/reviews/", response_model=List[ReviewResponse])
 def get_user_reviews(
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user_from_cookie),
     db: Session = Depends(get_db)
 ):
     """
@@ -226,7 +156,7 @@ def get_user_reviews(
 
 @app.get("/profile/helpfulness/", response_model=HelpfulnessScore)
 def get_user_helpfulness(
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user_from_cookie),
     db: Session = Depends(get_db)
 ):
     """
@@ -240,7 +170,7 @@ def get_user_helpfulness(
 def edit_review(
     review_id: int,
     review_data: ReviewUpdate,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user_from_cookie),
     db: Session = Depends(get_db)
 ):
     """
@@ -258,7 +188,7 @@ def edit_review(
 @app.delete("/review/{review_id}/")
 def remove_review(
     review_id: int,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user_from_cookie),
     db: Session = Depends(get_db)
 ):
     """

@@ -1,12 +1,11 @@
 import os
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import List
 import uuid
 import json
 import jwt
-from fastapi import APIRouter, Depends, Request, HTTPException, Response, Header
+from fastapi import APIRouter, Depends, Request, HTTPException, Response
 from fastapi.responses import JSONResponse, RedirectResponse, HTMLResponse
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from authlib.integrations.starlette_client import OAuth, OAuthError
 from dotenv import load_dotenv
@@ -20,7 +19,6 @@ load_dotenv()
 
 router = APIRouter()
 oauth = OAuth()
-security = HTTPBearer()
 
 oauth.register(
     name='google',
@@ -53,71 +51,6 @@ def create_jwt_token(user_id: str, profile_pic: str) -> str:
     }
     return jwt.encode(payload, JWT_SECRET_KEY, algorithm="HS256")
 
-# Function to get user from JWT token (either from cookie or header)
-async def get_user_from_jwt(token: str, db: Session) -> dict:
-    try:
-        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=["HS256"])
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.PyJWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    
-    user_id = payload.get("sub")
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Token missing subject")
-    
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-    
-    user_data = {
-        "id": user.id,
-        "fullName": user.fullName,
-        "google_id": user.google_id,
-        "profile_pic": payload.get("pfp")  # "pfp" is included in the JWT token payload
-    }
-
-    return user_data
-
-# Dependency to get user from Authorization header (Bearer token)
-async def get_current_user_from_token(
-    credentials: HTTPAuthorizationCredentials = Depends(security, use_cache=False),
-    db: Session = Depends(get_db)
-):
-    """
-    Get user from bearer token, or return None if no token or invalid token.
-    This function is designed to be used with an alternate authentication method.
-    """
-    try:
-        token = credentials.credentials
-        return await get_user_from_jwt(token, db)
-    except (HTTPException, AttributeError):
-        # Return None instead of raising an exception
-        # This allows fallback to cookie authentication
-        return None
-
-# Dependency to get user from cookie (for web UI)
-async def get_current_user_from_cookie(request: Request, db: Session = Depends(get_db)):
-    """
-    Get user from cookie, or return None if no cookie or invalid cookie.
-    This function is designed to be used with an alternate authentication method.
-    """
-    # Log request details for debugging
-    print(f"Auth check headers: {dict(request.headers)}")
-    print(f"Auth check cookies: {dict(request.cookies)}")
-    
-    token = request.cookies.get("access_token")
-    if not token:
-        print("No access_token cookie found")
-        return None
-    
-    try:
-        return await get_user_from_jwt(token, db)
-    except HTTPException:
-        # Return None instead of raising an exception
-        # This allows fallback to other authentication methods
-        return None
-
 @router.get("/google/login")
 async def google_login(request: Request, next: str = None):
     # Save the "next" URL in the session if provided
@@ -125,6 +58,7 @@ async def google_login(request: Request, next: str = None):
         request.session["next"] = next
     redirect_uri = request.url_for("google_callback")
     return await oauth.google.authorize_redirect(request, str(redirect_uri))
+
 
 @router.get("/google/callback", response_model=UserResponse)
 async def google_callback(request: Request, db: Session = Depends(get_db)):
@@ -185,28 +119,41 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
     
     return response
 
-# Endpoint to get a JWT token that can be used for API calls
-@router.get("/token", response_model=dict)
-async def get_api_token(current_user: dict = Depends(get_current_user_from_cookie)):
-    """
-    Generate a JWT token for API usage.
-    This endpoint allows a user to get a token they can use for API calls.
-    Requires the user to be already authenticated via cookie.
-    """
-    user_id = current_user.get("id")
-    profile_pic = current_user.get("profile_pic", "")
+def get_current_user_from_cookie(request: Request, db: Session = Depends(get_db)):
+    # Log request details for debugging
+    print(f"Auth check headers: {dict(request.headers)}")
+    print(f"Auth check cookies: {dict(request.cookies)}")
     
-    # Generate a fresh JWT token
-    jwt_token = create_jwt_token(user_id, profile_pic)
+    token = request.cookies.get("access_token")
+    if not token:
+        print("No access_token cookie found")
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=["HS256"])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
     
-    return {
-        "access_token": jwt_token,
-        "token_type": "bearer",
-        "expires_in": JWT_EXPIRES_MINUTES * 60  # Expiry time in seconds
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Token missing subject")
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    
+    user_data = {
+        "id": user.id,
+        "fullName": user.fullName,
+        "google_id": user.google_id,
+        "profile_pic": payload.get("pfp")  # "pfp" is included in the JWT token payload
     }
 
+    return user_data
+
 @router.get("/me", response_model=UserResponse)
-def read_users_me(current_user: dict = Depends(get_current_user_from_cookie)):
+def read_users_me(current_user: User = Depends(get_current_user_from_cookie)):
     return current_user
 
 @router.post("/logout")
