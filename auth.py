@@ -81,14 +81,27 @@ async def get_user_from_jwt(token: str, db: Session) -> dict:
 
 # Dependency to get user from Authorization header (Bearer token)
 async def get_current_user_from_token(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    credentials: HTTPAuthorizationCredentials = Depends(security, use_cache=False),
     db: Session = Depends(get_db)
 ):
-    token = credentials.credentials
-    return await get_user_from_jwt(token, db)
+    """
+    Get user from bearer token, or return None if no token or invalid token.
+    This function is designed to be used with an alternate authentication method.
+    """
+    try:
+        token = credentials.credentials
+        return await get_user_from_jwt(token, db)
+    except (HTTPException, AttributeError):
+        # Return None instead of raising an exception
+        # This allows fallback to cookie authentication
+        return None
 
 # Dependency to get user from cookie (for web UI)
 async def get_current_user_from_cookie(request: Request, db: Session = Depends(get_db)):
+    """
+    Get user from cookie, or return None if no cookie or invalid cookie.
+    This function is designed to be used with an alternate authentication method.
+    """
     # Log request details for debugging
     print(f"Auth check headers: {dict(request.headers)}")
     print(f"Auth check cookies: {dict(request.cookies)}")
@@ -96,9 +109,14 @@ async def get_current_user_from_cookie(request: Request, db: Session = Depends(g
     token = request.cookies.get("access_token")
     if not token:
         print("No access_token cookie found")
-        raise HTTPException(status_code=401, detail="Not authenticated")
+        return None
     
-    return await get_user_from_jwt(token, db)
+    try:
+        return await get_user_from_jwt(token, db)
+    except HTTPException:
+        # Return None instead of raising an exception
+        # This allows fallback to other authentication methods
+        return None
 
 @router.get("/google/login")
 async def google_login(request: Request, next: str = None):

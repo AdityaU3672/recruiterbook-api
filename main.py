@@ -48,7 +48,20 @@ def get_current_user(
     Tries to get the user from either cookie or token.
     Gives priority to token if both are present.
     """
-    return token_user or cookie_user
+    # If token authentication worked, use that
+    if token_user:
+        return token_user
+    
+    # Otherwise try cookie authentication
+    if cookie_user:
+        return cookie_user
+    
+    # If neither method worked, raise an error
+    raise HTTPException(
+        status_code=401,
+        detail="Not authenticated. Please login first.",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
 
 # Initialize FastAPI without docs - we'll add custom protected docs routes below
 app = FastAPI(docs_url=None, redoc_url=None)
