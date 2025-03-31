@@ -32,11 +32,34 @@ def get_or_create_user(db: Session, user_data: UserCreate):
     # 3. Return the user (existing or newly created)
     return user
 
+def is_profane(text):
+    """Censor profane words in text with asterisks matching the length of the word."""
+    profanity.load_censor_words()  # Load default profanity list
+    
+    def custom_censor(word):
+        return '*' * len(word)
+    
+    profanity.censor_words = custom_censor
+    return profanity.censor(text)  # Returns text with profane words censored
 
-
+def contains_profanity(text):
+    """Checks if the text contains any profanity words.
+    
+    Args:
+        text (str): The text to check for profanity
+        
+    Returns:
+        bool: True if profanity is found, False otherwise
+    """
+    profanity.load_censor_words()
+    return profanity.contains_profanity(text)
 
 # Company creation (ensures no duplicates)
 def get_or_create_company(db: Session, company_name: str):
+    # Check for profanity in company name
+    if contains_profanity(company_name):
+        raise HTTPException(status_code=400, detail="Company name contains inappropriate language")
+        
     company = db.query(Company).filter(Company.name == company_name).first()
     if not company:
         company = Company(id=str(uuid.uuid4()), name=company_name)
@@ -47,6 +70,15 @@ def get_or_create_company(db: Session, company_name: str):
 
 # Recruiter creation (ensures no duplicates)
 def get_or_create_recruiter(db: Session, recruiter_data: RecruiterCreate):
+    # Check for profanity in recruiter name
+    if contains_profanity(recruiter_data.fullName):
+        raise HTTPException(status_code=400, detail="Recruiter name contains inappropriate language")
+        
+    # Check for profanity in company name (redundant since get_or_create_company also checks,
+    # but keeping for completeness)
+    if contains_profanity(recruiter_data.company):
+        raise HTTPException(status_code=400, detail="Company name contains inappropriate language")
+    
     # Get (or create) the company record.
     company = get_or_create_company(db, recruiter_data.company)
     
@@ -81,6 +113,14 @@ def get_or_create_recruiter(db: Session, recruiter_data: RecruiterCreate):
 
 # Find recruiters by full name and optional company
 def find_recruiters(db: Session, fullName: str, company: str = None):
+    # Check for profanity in recruiter name
+    if contains_profanity(fullName):
+        raise HTTPException(status_code=400, detail="Search contains inappropriate language")
+        
+    # Check for profanity in company name if provided
+    if company and contains_profanity(company):
+        raise HTTPException(status_code=400, detail="Company name contains inappropriate language")
+    
     query = db.query(Recruiter).filter(Recruiter.fullName == fullName)
     if company:
         query = query.join(Company).filter(Company.name == company)
@@ -139,6 +179,10 @@ def get_companies(db: Session):
     return db.query(Company).all()
 
 def delete_company_by_name(db: Session, company_name: str):
+    # Check for profanity in company name
+    if contains_profanity(company_name):
+        raise HTTPException(status_code=400, detail="Company name contains inappropriate language")
+        
     company = db.query(Company).filter(Company.name == company_name).first()
     if not company:
         return None  # Company not found
@@ -146,18 +190,12 @@ def delete_company_by_name(db: Session, company_name: str):
     db.commit()
     return company
 
-def is_profane(text):
-    """Censor profane words in text with asterisks matching the length of the word."""
-    profanity.load_censor_words()  # Load default profanity list
-    
-    def custom_censor(word):
-        return '*' * len(word)
-    
-    profanity.censor_words = custom_censor
-    return profanity.censor(text)  # Returns text with profane words censored
-
 def get_reviews_by_company(db: Session, company_name: str):
     """Retrieve all reviews associated with a specific company."""
+    # Check for profanity in company name
+    if contains_profanity(company_name):
+        raise HTTPException(status_code=400, detail="Company name contains inappropriate language")
+        
     recruiters = db.query(Recruiter).filter(Recruiter.company.has(name=company_name)).all()
     
     if not recruiters:
