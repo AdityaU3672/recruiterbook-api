@@ -18,10 +18,12 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "https://recruiterbook.0x0.lat"],  # Add your production frontend URL when ready
+    allow_origins=["http://localhost:3000", "https://recruiterbook.0x0.lat"],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "Accept", "Origin", "X-Requested-With"],
+    expose_headers=["Set-Cookie"],
+    max_age=86400,  # 24 hours
 )
 
 app.add_middleware(SessionMiddleware, secret_key="YOUR_RANDOM_SECRET")
@@ -73,43 +75,29 @@ def create_recruiter(recruiter: RecruiterCreate, db: Session = Depends(get_db)):
 @app.post("/review/", response_model=ReviewResponse)
 def create_review(
     review: ReviewCreate, 
+    current_user: dict = Depends(get_current_user_from_cookie),
     db: Session = Depends(get_db),
-    request: Request = None,
-    current_user: dict = None
+    request: Request = None
 ):
     try:
-        # Debug logging
+        # Debug logging for troubleshooting
         if request:
             print(f"Review creation - Headers: {dict(request.headers)}")
             print(f"Review creation - Cookies: {dict(request.cookies)}")
-        
-        # Try to get current user from cookie if not provided directly
-        if current_user is None:
-            try:
-                current_user = get_current_user_from_cookie(request, next(get_db()))
-                print(f"Retrieved current user from cookie: {current_user}")
-            except Exception as e:
-                print(f"Failed to get user from cookie: {str(e)}")
-        
-        # Set the user_id from the authenticated user if it wasn't provided in the request
-        review_data = review.dict()
-        if not review_data.get("user_id") and current_user:
-            print(f"Using user_id from cookie: {current_user.get('id')}")
-            review_data["user_id"] = current_user.get("id")
-        
-        # Ensure we have a user_id
-        if not review_data.get("user_id"):
-            raise HTTPException(status_code=400, detail="No user_id provided and not authenticated")
+        print(f"Review creation - Current user: {current_user}")
             
+        # Set the user_id from the authenticated user
+        review_data = review.dict()
+        review_data["user_id"] = current_user.get("id")
         review_obj = ReviewCreate(**review_data)
         
         new_review = post_review(db, review_obj)
         return new_review
     except HTTPException as e:
-        print(f"Review creation HTTPException: {e.detail}")
+        print(f"Review creation failed with HTTP error: {e.detail}")
         raise e
     except Exception as e:
-        print(f"Review creation exception: {str(e)}")
+        print(f"Review creation failed with error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Get Reviews
