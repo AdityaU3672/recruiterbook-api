@@ -337,5 +337,11 @@ def delete_review(db: Session, review_id: int, user_id: str):
     
     return {"message": "Review deleted successfully"}
 
+def get_all_recruiters(db: Session):
+    """
+    Returns all recruiters in the database.
+    """
+    return db.query(Recruiter).all()
+
 
 

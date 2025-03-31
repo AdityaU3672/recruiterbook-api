@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from sqlalchemy.orm import Session
 from database import SessionLocal, engine, Base
-from crud import downvote_review, get_or_create_user, get_or_create_recruiter, find_recruiters, get_reviews_by_company, post_review, get_reviews, get_companies, get_recruiter_by_id, delete_company_by_name, get_all_reviews, upvote_review, get_reviews_by_user, get_user_helpfulness_score, update_review, delete_review
+from crud import downvote_review, get_or_create_user, get_or_create_recruiter, find_recruiters, get_reviews_by_company, post_review, get_reviews, get_companies, get_recruiter_by_id, delete_company_by_name, get_all_reviews, upvote_review, get_reviews_by_user, get_user_helpfulness_score, update_review, delete_review, get_all_recruiters
 from schemas import UserCreate, UserResponse, RecruiterCreate, RecruiterResponse, ReviewCreate, ReviewResponse, CompanyResponse, HelpfulnessScore, ReviewUpdate
 from models import Review
 from typing import List
@@ -121,6 +121,10 @@ def get_reviews_for_recruiter(recruiter_id: str, db: Session = Depends(get_db)):
 @app.get("/companies/", response_model=List[CompanyResponse])
 def get_all_companies(db: Session = Depends(get_db)):
     return get_companies(db)
+
+@app.get("/recruiters/", response_model=List[RecruiterResponse])
+def get_all_recruiters_endpoint(db: Session = Depends(get_db)):
+    return get_all_recruiters(db)
 
 @app.delete("/company/{company_name}")
 def delete_company(company_name: str, db: Session = Depends(get_db)):
