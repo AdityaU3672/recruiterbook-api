@@ -113,14 +113,6 @@ def get_or_create_recruiter(db: Session, recruiter_data: RecruiterCreate):
 
 # Find recruiters by full name and optional company
 def find_recruiters(db: Session, fullName: str, company: str = None):
-    # Check for profanity in recruiter name
-    if contains_profanity(fullName):
-        raise HTTPException(status_code=400, detail="Search contains inappropriate language")
-        
-    # Check for profanity in company name if provided
-    if company and contains_profanity(company):
-        raise HTTPException(status_code=400, detail="Company name contains inappropriate language")
-    
     query = db.query(Recruiter).filter(Recruiter.fullName == fullName)
     if company:
         query = query.join(Company).filter(Company.name == company)
