@@ -6,6 +6,7 @@ from ai_service import generate_summary
 from google import verify_recruiter
 import uuid
 from better_profanity import profanity
+from fuzzywuzzy import fuzz, process
 
 # User creation/login
 def get_or_create_user(db: Session, user_data: UserCreate):
@@ -113,10 +114,61 @@ def get_or_create_recruiter(db: Session, recruiter_data: RecruiterCreate):
 
 # Find recruiters by full name and optional company
 def find_recruiters(db: Session, fullName: str, company: str = None):
-    query = db.query(Recruiter).filter(Recruiter.fullName == fullName)
+    # Get all recruiters (for initial filtering)
+    query = db.query(Recruiter)
+    
+    # Apply company filter if provided
     if company:
-        query = query.join(Company).filter(Company.name == company)
-    return query.all()
+        # Get recruiters filtered by company
+        company_filtered_query = query.join(Company).filter(Company.name == company)
+        company_filtered_recruiters = company_filtered_query.all()
+        
+        # If no matches with company filter, we'll do a global search later
+        if not company_filtered_recruiters:
+            all_recruiters = query.all()
+        else:
+            all_recruiters = company_filtered_recruiters
+    else:
+        # No company filter, get all recruiters
+        all_recruiters = query.all()
+    
+    # If no recruiters at all in DB, return empty list
+    if not all_recruiters:
+        return []
+    
+    # Prepare list of recruiter names for fuzzy matching
+    recruiter_choices = [(recruiter, recruiter.fullName) for recruiter in all_recruiters]
+    
+    # Perform fuzzy matching and get top 10 similar names
+    # token_sort_ratio handles better when words are in different order or misspelled
+    results = process.extractBests(
+        fullName, 
+        recruiter_choices,
+        processor=lambda x: x[1],       # Extract the name from the tuple
+        scorer=fuzz.token_sort_ratio,   # Better for partial matches and misspellings
+        score_cutoff=40,                # Lower threshold to catch more potential matches
+        limit=10                        # Limit to top 10 results
+    )
+    
+    # If company filter was applied but no good matches found, try global search
+    if not results and company and len(all_recruiters) < len(query.all()):
+        # Get all recruiters (without company filter)
+        all_recruiters_global = query.all()
+        recruiter_choices_global = [(recruiter, recruiter.fullName) for recruiter in all_recruiters_global]
+        
+        # Perform global fuzzy search
+        results = process.extractBests(
+            fullName, 
+            recruiter_choices_global,
+            processor=lambda x: x[1],
+            scorer=fuzz.token_sort_ratio,
+            limit=10
+        )
+    
+    # Extract just the recruiter objects from the results (discard scores)
+    similar_recruiters = [item[0][0] for item in results] if results else []
+    
+    return similar_recruiters
 
 def get_recruiter_by_id(db: Session, recruiter_id: str):
     return db.query(Recruiter).filter(Recruiter.id == recruiter_id).first()

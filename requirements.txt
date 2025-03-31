@@ -10,3 +10,5 @@ authlib
 PyJWT
 itsdangerous
 psycopg2-binary
+fuzzywuzzy
+python-Levenshtein
