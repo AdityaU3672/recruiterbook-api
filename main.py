@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from sqlalchemy.orm import Session
@@ -73,20 +73,43 @@ def create_recruiter(recruiter: RecruiterCreate, db: Session = Depends(get_db)):
 @app.post("/review/", response_model=ReviewResponse)
 def create_review(
     review: ReviewCreate, 
-    current_user: dict = Depends(get_current_user_from_cookie),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    request: Request = None,
+    current_user: dict = None
 ):
     try:
-        # Set the user_id from the authenticated user
+        # Debug logging
+        if request:
+            print(f"Review creation - Headers: {dict(request.headers)}")
+            print(f"Review creation - Cookies: {dict(request.cookies)}")
+        
+        # Try to get current user from cookie if not provided directly
+        if current_user is None:
+            try:
+                current_user = get_current_user_from_cookie(request, next(get_db()))
+                print(f"Retrieved current user from cookie: {current_user}")
+            except Exception as e:
+                print(f"Failed to get user from cookie: {str(e)}")
+        
+        # Set the user_id from the authenticated user if it wasn't provided in the request
         review_data = review.dict()
-        review_data["user_id"] = current_user.get("id")
+        if not review_data.get("user_id") and current_user:
+            print(f"Using user_id from cookie: {current_user.get('id')}")
+            review_data["user_id"] = current_user.get("id")
+        
+        # Ensure we have a user_id
+        if not review_data.get("user_id"):
+            raise HTTPException(status_code=400, detail="No user_id provided and not authenticated")
+            
         review_obj = ReviewCreate(**review_data)
         
         new_review = post_review(db, review_obj)
         return new_review
     except HTTPException as e:
+        print(f"Review creation HTTPException: {e.detail}")
         raise e
     except Exception as e:
+        print(f"Review creation exception: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Get Reviews
