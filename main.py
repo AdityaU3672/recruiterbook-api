@@ -8,13 +8,20 @@ from schemas import UserCreate, UserResponse, RecruiterCreate, RecruiterResponse
 from models import Review
 from typing import List
 import uvicorn
+import os
 from auth import get_current_user_from_cookie, router as auth_router
 from starlette.middleware.sessions import SessionMiddleware
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8080)
 
-app = FastAPI()
+# Disable docs in production by checking environment
+is_prod = os.getenv("ENVIRONMENT", "dev").lower() == "production"
+app = FastAPI(
+    docs_url=None if is_prod else "/docs",
+    redoc_url=None if is_prod else "/redoc",
+    openapi_url=None if is_prod else "/openapi.json"
+)
 
 app.add_middleware(
     CORSMiddleware,
