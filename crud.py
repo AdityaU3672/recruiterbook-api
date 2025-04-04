@@ -123,8 +123,7 @@ def find_recruiters(db: Session, fullName: str, company: str = None):
         return []
     
     # Set an absolute minimum similarity threshold to prevent irrelevant matches
-    # This ensures names like "Bob" and "John" will never match
-    ABSOLUTE_MIN_THRESHOLD = 40
+    ABSOLUTE_MIN_THRESHOLD = 65
     
     # Prepare a list to store recruiter objects with their similarity scores
     scored_recruiters = []
@@ -163,15 +162,6 @@ def find_recruiters(db: Session, fullName: str, company: str = None):
     else:
         # If no company specified, just use the score-sorted list
         sorted_recruiters = [r for r, _ in scored_recruiters]
-    
-    # Print debug information to help diagnose issues
-    print(f"Search query: '{fullName}' at company: '{company}'")
-    for recruiter in sorted_recruiters[:10]:
-        token_score = fuzz.token_sort_ratio(fullName.lower(), recruiter.fullName.lower())
-        partial_score = fuzz.partial_ratio(fullName.lower(), recruiter.fullName.lower())
-        ratio_score = fuzz.ratio(fullName.lower(), recruiter.fullName.lower())
-        best_score = max(token_score, partial_score, ratio_score)
-        print(f"Match: {recruiter.fullName} at {recruiter.company.name} - Scores: token={token_score}, partial={partial_score}, ratio={ratio_score}, best={best_score}")
     
     # Return at most 10 results
     return sorted_recruiters[:10]
