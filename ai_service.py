@@ -27,7 +27,7 @@ def generate_summary(reviews: List) -> str:
 
     try:
         # Prepare and sanitize the prompt
-        prompt = "Summarize the following recruiter reviews in a professional and concise manner, focusing on key patterns and overall sentiment:\n\n"
+        prompt = "Based on the following candidate feedback, create a professional description of this recruiter. Focus on their style, approach, and qualities:\n\n"
         for review in reviews:
             sanitized_text = sanitize_review_text(review.text)
             if sanitized_text.strip():  # Only add non-empty reviews
@@ -40,7 +40,7 @@ def generate_summary(reviews: List) -> str:
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "You are a professional recruiter review analyst. Provide concise, objective summaries focusing on patterns and key points."},
+                {"role": "system", "content": "You are creating professional profile descriptions for recruiters based on candidate reviews. Write in third person about the recruiter, not about the reviews themselves. Focus on the recruiter's qualities, style, and approach as described in the reviews. Never mention 'the reviewer' or 'the reviews' in your summary."},
                 {"role": "user", "content": prompt}
             ],
             max_tokens=150,
