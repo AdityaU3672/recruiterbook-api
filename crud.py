@@ -114,17 +114,15 @@ def get_or_create_recruiter(db: Session, recruiter_data: RecruiterCreate):
 
 # Find recruiters by full name and optional company
 def find_recruiters(db: Session, fullName: str, company: str = None):
-    # Get all recruiters (for initial filtering)
+    # Get all recruiters
     query = db.query(Recruiter)
-    
-    # Get all recruiters for fuzzy name matching
     all_recruiters = query.all()
     
     # If no recruiters at all in DB, return empty list
     if not all_recruiters:
         return []
     
-    # Prepare list of recruiter names for fuzzy matching
+    # Prepare list of recruiter names for fuzzy matching using all recruiters
     recruiter_choices = [(recruiter, recruiter.fullName) for recruiter in all_recruiters]
     
     # Try different fuzzy matching approaches for better results
@@ -136,7 +134,7 @@ def find_recruiters(db: Session, fullName: str, company: str = None):
         processor=lambda x: x[1],       # Extract the name from the tuple
         scorer=fuzz.token_sort_ratio,   # Better for partial matches and misspellings
         score_cutoff=60,                # Higher threshold to prevent irrelevant results
-        limit=20                        # Increased limit to have more candidates for reordering
+        limit=20                        # Higher limit to have enough candidates for reordering
     )
     
     # 2. If no results, try with partial_ratio for partial matches
@@ -161,35 +159,38 @@ def find_recruiters(db: Session, fullName: str, company: str = None):
             limit=20
         )
     
-    # Extract recruiters with their scores
-    scored_recruiters = [(item[0][0], item[1]) for item in results] if results else []
+    # If there are no results at all with any method, return empty list
+    if not results:
+        return []
     
-    # Sort the results to prioritize company matches if company is provided
-    if company and scored_recruiters:
-        # Split the list into two: matching company and non-matching company
+    # Extract recruiters with their scores and sort by score (highest first)
+    scored_recruiters = [(item[0][0], item[1]) for item in results]
+    
+    # If company is specified, reorganize results to prioritize that company
+    if company:
+        # Split into two lists: company matches and non-company matches
         company_matches = []
         non_company_matches = []
         
         for recruiter, score in scored_recruiters:
-            # Check if this recruiter's company matches the search company
-            if recruiter.company.name.lower() == company.lower():
+            if recruiter.company and recruiter.company.name.lower() == company.lower():
                 company_matches.append((recruiter, score))
             else:
                 non_company_matches.append((recruiter, score))
-        
+                
         # Sort each list by score (descending)
         company_matches.sort(key=lambda x: x[1], reverse=True)
         non_company_matches.sort(key=lambda x: x[1], reverse=True)
         
-        # Combine lists with company matches first, still maintaining score order within each group
-        sorted_recruiters = [r[0] for r in company_matches] + [r[0] for r in non_company_matches]
-        
-        # Limit to top 10 results after reordering
-        return sorted_recruiters[:10]
+        # Combine the lists with company matches first
+        sorted_recruiters = [r for r, _ in company_matches] + [r for r, _ in non_company_matches]
     else:
-        # If no company provided, just sort by score
+        # If no company specified, just sort by score
         scored_recruiters.sort(key=lambda x: x[1], reverse=True)
-        return [r[0] for r in scored_recruiters[:10]]
+        sorted_recruiters = [r for r, _ in scored_recruiters]
+    
+    # Return at most 10 results
+    return sorted_recruiters[:10]
 
 def get_recruiter_by_id(db: Session, recruiter_id: str):
     return db.query(Recruiter).filter(Recruiter.id == recruiter_id).first()
