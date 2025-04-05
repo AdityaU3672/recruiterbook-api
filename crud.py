@@ -390,6 +390,11 @@ def delete_review(db: Session, review_id: int, user_id: str):
         raise HTTPException(status_code=404, detail="Review not found or unauthorized")
     
     recruiter_id = review.recruiter_id
+    
+    # First delete all associated votes to avoid foreign key constraint violations
+    db.query(ReviewVote).filter(ReviewVote.review_id == review_id).delete()
+    
+    # Then delete the review
     db.delete(review)
     db.commit()
     
