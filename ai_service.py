@@ -26,6 +26,9 @@ def generate_summary(reviews: List) -> str:
         return "No reviews available for this recruiter yet."
 
     try:
+        # Count total words across all reviews to detect limited information
+        total_words = sum(len(review.text.split()) for review in reviews)
+        
         # Prepare and sanitize the prompt
         prompt = "Based on the following candidate feedback, create a professional description of this recruiter. Focus on their style, approach, and qualities:\n\n"
         for review in reviews:
@@ -35,16 +38,23 @@ def generate_summary(reviews: List) -> str:
 
         if not prompt.strip():
             return "No reviews available for this recruiter yet."
-
+            
+        # Adjust prompt based on review volume
+        if total_words < 20:  # Limited information
+            prompt += "\nNote: There is limited information available. Be very brief, factual, and avoid making inferences beyond what is directly stated."
+            temperature = 0.3  # Lower temperature for more conservative outputs
+        else:
+            temperature = 0.7
+            
         # Make the API call with error handling
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "You are creating professional profile descriptions for recruiters based on candidate reviews. Write in third person about the recruiter, not about the reviews themselves. Focus on the recruiter's qualities, style, and approach as described in the reviews. Never mention 'the reviewer' or 'the reviews' in your summary."},
+                {"role": "system", "content": "You are creating professional profile descriptions for recruiters based on candidate reviews. Write in third person about the recruiter, not about the reviews themselves. Focus only on what can be directly inferred from the reviews. Be conservative with limited information - if there's not much to say, keep it very brief and factual. Never embellish or make up qualities not evidenced in the reviews."},
                 {"role": "user", "content": prompt}
             ],
             max_tokens=150,
-            temperature=0.7
+            temperature=temperature
         )
 
         summary = response.choices[0].message.content.strip()
@@ -52,14 +62,18 @@ def generate_summary(reviews: List) -> str:
         # Validate the summary
         if not summary or len(summary) < 10:  # Basic validation
             return "Based on the available reviews, this recruiter has received feedback from candidates."
+        
+        # For reviews with limited information, enforce brevity
+        if total_words < 20 and len(summary) > 100:
+            return "This recruiter has limited feedback from candidates. More reviews are needed for a comprehensive profile."
             
         return summary
 
     except openai.APIError as e:
         logger.error(f"OpenAI API error: {str(e)}")
-        return "Based on the available reviews, this recruiter has received ambivalent feedback from candidates."
+        return "Based on the available reviews, this recruiter has received feedback from candidates."
     except Exception as e:
         logger.error(f"Unexpected error in summary generation: {str(e)}")
-        return "Based on the available reviews, this recruiter has received ambivalent feedback from candidates." 
+        return "Based on the available reviews, this recruiter has received feedback from candidates." 
 
 
