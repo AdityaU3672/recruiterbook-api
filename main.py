@@ -12,16 +12,29 @@ import os
 from auth import get_current_user_from_cookie, router as auth_router
 from starlette.middleware.sessions import SessionMiddleware
 
+# Import slowapi for rate limiting
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8080)
 
 # Disable docs in production by checking environment
 is_prod = os.getenv("ENVIRONMENT", "dev").lower() == "production"
+
+# Initialize rate limiter with default key function (IP-based)
+limiter = Limiter(key_func=get_remote_address)
+
 app = FastAPI(
     docs_url=None if is_prod else "/docs",
     redoc_url=None if is_prod else "/redoc",
     openapi_url=None if is_prod else "/openapi.json"
 )
+
+# Add rate limiter to the app state
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -46,11 +59,21 @@ def get_db():
     finally:
         db.close()
 
+# Function to get user ID for rate limiting (used for authenticated endpoints)
+def get_user_id_for_limiter(request: Request):
+    try:
+        user = get_current_user_from_cookie(request)
+        return str(user.get("id"))
+    except:
+        # Fall back to IP address if user is not authenticated
+        return get_remote_address(request)
+
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
 
-# User Authentication
+# User Authentication (IP-based rate limiting since it's before authentication)
 @app.post("/user/", response_model=UserResponse)
-def create_or_get_user(user: UserCreate, db: Session = Depends(get_db)):
+@limiter.limit("20/minute")
+def create_or_get_user(user: UserCreate, db: Session = Depends(get_db), request: Request = None):
     return get_or_create_user(db, user)
 
 # Find Recruiter
@@ -73,13 +96,15 @@ def get_reviews_for_company(company_name: str, db: Session = Depends(get_db)):
     return reviews
 
 
-# Create Recruiter
+# Create Recruiter - Add rate limiting per user
 @app.post("/recruiter/", response_model=RecruiterResponse)
-def create_recruiter(recruiter: RecruiterCreate, db: Session = Depends(get_db)):
+@limiter.limit("5/minute", key_func=get_user_id_for_limiter)
+def create_recruiter(recruiter: RecruiterCreate, db: Session = Depends(get_db), request: Request = None):
     return get_or_create_recruiter(db, recruiter)
 
 # Post Review
 @app.post("/review/", response_model=ReviewResponse)
+@limiter.limit("10/minute", key_func=get_user_id_for_limiter)
 def create_review(
     review: ReviewCreate, 
     current_user: dict = Depends(get_current_user_from_cookie),
@@ -122,7 +147,8 @@ def get_all_recruiters_endpoint(db: Session = Depends(get_db)):
     return get_all_recruiters(db)
 
 @app.delete("/company/{company_name}")
-def delete_company(company_name: str, db: Session = Depends(get_db)):
+@limiter.limit("10/minute", key_func=get_user_id_for_limiter)
+def delete_company(company_name: str, db: Session = Depends(get_db), request: Request = None):
     company = delete_company_by_name(db, company_name)
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
@@ -134,10 +160,12 @@ def get_all_reviews_endpoint(db: Session = Depends(get_db)):
     return reviews
 
 @app.post("/review/upvote/{review_id}")
+@limiter.limit("30/minute", key_func=get_user_id_for_limiter)
 def upvote(
     review_id: int, 
     current_user: dict = Depends(get_current_user_from_cookie),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    request: Request = None
 ):
     try:
         original_review = db.query(Review).filter(Review.id == review_id).first()
@@ -160,10 +188,12 @@ def upvote(
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/review/downvote/{review_id}")
+@limiter.limit("30/minute", key_func=get_user_id_for_limiter)
 def downvote(
     review_id: int,
     current_user: dict = Depends(get_current_user_from_cookie),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    request: Request = None
 ):
     try:
         original_review = db.query(Review).filter(Review.id == review_id).first()
@@ -209,11 +239,13 @@ def get_user_helpfulness(
     return get_user_helpfulness_score(db, user_id)
 
 @app.put("/review/{review_id}/", response_model=ReviewResponse)
+@limiter.limit("15/minute", key_func=get_user_id_for_limiter)
 def edit_review(
     review_id: int,
     review_data: ReviewUpdate,
     current_user: dict = Depends(get_current_user_from_cookie),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    request: Request = None
 ):
     """
     Edit a review. Only the review author can edit their own review.
@@ -228,10 +260,12 @@ def edit_review(
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/review/{review_id}/")
+@limiter.limit("10/minute", key_func=get_user_id_for_limiter)
 def remove_review(
     review_id: int,
     current_user: dict = Depends(get_current_user_from_cookie),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    request: Request = None
 ):
     """
     Delete a review. Only the review author can delete their own review.
