@@ -7,6 +7,7 @@ from google import verify_recruiter
 import uuid
 from better_profanity import profanity
 from fuzzywuzzy import fuzz, process
+from database import SessionLocal
 
 # User creation/login
 def get_or_create_user(db: Session, user_data: UserCreate):
@@ -89,25 +90,40 @@ def get_or_create_recruiter(db: Session, recruiter_data: RecruiterCreate):
         Recruiter.company_id == company.id
     ).first()
 
-    # Determine verification status (True if verified, False otherwise)
-    verified_status = verify_recruiter(recruiter_data.fullName, recruiter_data.company)
+    # Set default verified status - will be updated asynchronously
+    verified_status = False
     
-    # If the recruiter doesn't exist, create a new one with the verification status.
+    # If the recruiter doesn't exist, create a new one with default verification status.
     if not recruiter:
         recruiter = Recruiter(
             id=str(uuid.uuid4()),
             fullName=recruiter_data.fullName,
             company_id=company.id,
             summary="",         # Placeholder for future AI-generated summaries
-            verified=verified_status  # Set verified property based on verification result
+            verified=verified_status  # Default to False, will be updated asynchronously
         )
         db.add(recruiter)
         db.commit()
         db.refresh(recruiter)
-    else:
-        # If recruiter exists, update the verified property
-        recruiter.verified = verified_status
-        db.commit()
+    
+    # Schedule verification in a background task (don't wait for it)
+    import threading
+    def verify_in_background():
+        try:
+            verified = verify_recruiter(recruiter_data.fullName, recruiter_data.company)
+            # Update the recruiter's verified status in a new session
+            with SessionLocal() as bg_db:
+                db_recruiter = bg_db.query(Recruiter).filter(Recruiter.id == recruiter.id).first()
+                if db_recruiter:
+                    db_recruiter.verified = verified
+                    bg_db.commit()
+        except Exception as e:
+            print(f"Background verification failed: {str(e)}")
+    
+    # Start the background task
+    thread = threading.Thread(target=verify_in_background)
+    thread.daemon = True  # Thread will die when main thread exits
+    thread.start()
     
     return recruiter
 
@@ -202,9 +218,30 @@ def post_review(db: Session, review_data: ReviewCreate):
     recruiter.avg_prof = sum(r.professionalism for r in reviews) // len(reviews)
     recruiter.avg_help = sum(r.helpfulness for r in reviews) // len(reviews)
     recruiter.avg_final_stage = sum(r.final_stage for r in reviews) // len(reviews)
-    recruiter.summary = generate_summary(reviews)
-
+    
+    # Update database with average ratings now
     db.commit()
+    
+    # Generate summary in the background
+    import threading
+    def generate_summary_in_background():
+        try:
+            # Get fresh data in a new session
+            with SessionLocal() as bg_db:
+                bg_reviews = bg_db.query(Review).filter(Review.recruiter_id == review_data.recruiter_id).all()
+                if bg_reviews:
+                    summary_text = generate_summary(bg_reviews)
+                    bg_recruiter = bg_db.query(Recruiter).filter(Recruiter.id == review_data.recruiter_id).first()
+                    if bg_recruiter:
+                        bg_recruiter.summary = summary_text
+                        bg_db.commit()
+        except Exception as e:
+            print(f"Background summary generation failed: {str(e)}")
+    
+    # Start the background task
+    thread = threading.Thread(target=generate_summary_in_background)
+    thread.daemon = True
+    thread.start()
 
     return new_review
 
