@@ -22,10 +22,28 @@ def verify_recruiter(name: str, company: str) -> bool:
     if not items:
         return False
     
+    # Keywords related to recruiting roles
+    recruiting_keywords = [
+        "recruiter", "talent", "hiring", "recruitment", "sourcing", 
+        "hr", "human resources", "people operations", "talent acquisition",
+        "staffing", "personnel", "talent partner"
+    ]
+    
     for item in items:
         snippet = item.get("snippet", "").lower()
         link = item.get("link", "").lower()
-        if "recruiter" in snippet:
-            return True
+        title = item.get("title", "").lower()
+        
+        # Check for LinkedIn profile which is a strong indicator
+        if "linkedin.com/in/" in link:
+            # Check if any recruiting keyword is in the snippet or title
+            for keyword in recruiting_keywords:
+                if keyword in snippet or keyword in title:
+                    return True
+                    
+        # Also check non-LinkedIn results for recruiting keywords
+        for keyword in recruiting_keywords:
+            if keyword in snippet:
+                return True
 
     return False
