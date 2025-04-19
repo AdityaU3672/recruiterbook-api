@@ -2,6 +2,33 @@ from sqlalchemy import Column, String, Integer, ForeignKey, Boolean, DateTime
 from sqlalchemy.orm import relationship
 from database import Base
 from datetime import datetime
+from enum import IntEnum
+
+class IndustryEnum(IntEnum):
+    TECH = 0
+    FINANCE = 1
+    CONSULTING = 2
+    HEALTHCARE = 3
+    
+    @classmethod
+    def to_str(cls, value):
+        mapping = {
+            cls.TECH: "Tech",
+            cls.FINANCE: "Finance",
+            cls.CONSULTING: "Consulting",
+            cls.HEALTHCARE: "Healthcare"
+        }
+        return mapping.get(value, "Unknown")
+    
+    @classmethod
+    def from_str(cls, value):
+        mapping = {
+            "Tech": cls.TECH,
+            "Finance": cls.FINANCE,
+            "Consulting": cls.CONSULTING,
+            "Healthcare": cls.HEALTHCARE
+        }
+        return mapping.get(value, cls.TECH)  # Default to Tech if not found
 
 class User(Base):
     __tablename__ = "users"
@@ -14,7 +41,7 @@ class Company(Base):
     __tablename__ = "companies"
     id = Column(String, primary_key=True, index=True)
     name = Column(String, unique=True, index=True) 
-    industry = Column(String, nullable=True)
+    industry = Column(Integer, nullable=True)
 
 class Recruiter(Base):
     __tablename__ = "recruiters"

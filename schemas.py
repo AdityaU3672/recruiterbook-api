@@ -1,6 +1,13 @@
 from pydantic import BaseModel, field_validator
 from typing import Optional, Union, Any
 from datetime import datetime
+from enum import IntEnum
+
+class IndustryEnum(IntEnum):
+    TECH = 0
+    FINANCE = 1
+    CONSULTING = 2
+    HEALTHCARE = 3
 
 class UserCreate(BaseModel):
     fullName: str
@@ -13,12 +20,28 @@ class UserResponse(BaseModel):
 
 class CompanyCreate(BaseModel):
     name: str
-    industry: Optional[str] = None
+    industry: Optional[int] = None
 
 class CompanyResponse(BaseModel):
     id: str
     name: str
-    industry: Optional[str] = None
+    industry: Optional[int] = None
+    
+    class Config:
+        from_attributes = True
+
+class IndustryResponse(BaseModel):
+    id: int
+    name: str
+    
+    @classmethod
+    def get_all(cls):
+        return [
+            cls(id=IndustryEnum.TECH, name="Tech"),
+            cls(id=IndustryEnum.FINANCE, name="Finance"),
+            cls(id=IndustryEnum.CONSULTING, name="Consulting"),
+            cls(id=IndustryEnum.HEALTHCARE, name="Healthcare")
+        ]
 
 class RecruiterCreate(BaseModel):
     fullName: str

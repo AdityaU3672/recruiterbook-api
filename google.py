@@ -1,5 +1,6 @@
 import requests
 import os
+from models import IndustryEnum
 
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 SEARCH_ENGINE_ID = os.getenv("SEARCH_ENGINE_ID")
@@ -51,14 +52,15 @@ def verify_recruiter(name: str, company: str) -> bool:
 def infer_company_industry(company_name: str) -> str:
     """
     Uses Google Search to infer a company's industry based on search results.
-    Returns the best-guess industry from: tech, finance, consulting, or healthcare.
+    Returns the industry as a string for backward compatibility.
+    The caller should convert to enum integer using IndustryEnum.from_str().
     """
     query = f"{company_name} industry sector"
     data = google_search(query)
     
     items = data.get("items", [])
     if not items:
-        return "Unknown"
+        return "Tech"  # Default to Tech
     
     # Limit industry categories to the four required ones
     industry_keywords = {
@@ -97,4 +99,4 @@ def infer_company_industry(company_name: str) -> str:
     if best_match[1] > 0:
         return best_match[0].title()  # Capitalize the industry name
     else:
-        return "Unknown"
+        return "Tech"  # Default to Tech

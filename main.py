@@ -4,8 +4,8 @@ from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from sqlalchemy.orm import Session
 from database import SessionLocal, engine, Base
 from crud import downvote_review, get_or_create_user, get_or_create_recruiter, find_recruiters, get_reviews_by_company, post_review, get_reviews, get_companies, get_recruiter_by_id, delete_company_by_name, get_all_reviews, upvote_review, get_reviews_by_user, get_user_helpfulness_score, update_review, delete_review, get_all_recruiters, get_reviews_by_industry, update_all_company_industries, get_all_industries, get_companies_by_industry
-from schemas import UserCreate, UserResponse, RecruiterCreate, RecruiterResponse, ReviewCreate, ReviewResponse, CompanyResponse, HelpfulnessScore, ReviewUpdate
-from models import Review
+from schemas import UserCreate, UserResponse, RecruiterCreate, RecruiterResponse, ReviewCreate, ReviewResponse, CompanyResponse, HelpfulnessScore, ReviewUpdate, IndustryResponse
+from models import Review, IndustryEnum
 from typing import List
 import uvicorn
 import os
@@ -95,12 +95,14 @@ def get_reviews_for_company(company_name: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="No reviews found for this company")
     return reviews
 
-@app.get("/reviews/industry/{industry}", response_model=List[ReviewResponse])
-def get_reviews_by_industry_endpoint(industry: str, db: Session = Depends(get_db)):
+@app.get("/reviews/industry/{industry_id}", response_model=List[ReviewResponse])
+def get_reviews_by_industry_endpoint(industry_id: int, db: Session = Depends(get_db)):
     """
     Retrieve all reviews for recruiters at companies in a specific industry.
+    Industry ID is an integer:
+    0 = Tech, 1 = Finance, 2 = Consulting, 3 = Healthcare
     """
-    reviews = get_reviews_by_industry(db, industry)
+    reviews = get_reviews_by_industry(db, industry_id)
     return reviews
 
 # Create Recruiter - Add rate limiting per user
@@ -307,23 +309,25 @@ def update_all_industries_endpoint(
 ):
     """
     Special endpoint to update all companies in the database to use only
-    the four industry categories: Tech, Finance, Consulting, and Healthcare.
+    the four industry categories: 0 = Tech, 1 = Finance, 2 = Consulting, 3 = Healthcare
     """
     result = update_all_company_industries(db, force_update=True)
     return result
 
-@app.get("/industries/", response_model=List[str])
+@app.get("/industries/", response_model=List[IndustryResponse])
 def get_industries(db: Session = Depends(get_db)):
     """
-    Returns a list of all unique industries in the database.
+    Returns a list of all industries with their IDs and names.
     """
     return get_all_industries(db)
 
-@app.get("/companies/industry/{industry}", response_model=List[CompanyResponse])
-def get_companies_by_industry_endpoint(industry: str, db: Session = Depends(get_db)):
+@app.get("/companies/industry/{industry_id}", response_model=List[CompanyResponse])
+def get_companies_by_industry_endpoint(industry_id: int, db: Session = Depends(get_db)):
     """
     Retrieve all companies belonging to a specific industry.
+    Industry ID is an integer:
+    0 = Tech, 1 = Finance, 2 = Consulting, 3 = Healthcare
     """
-    companies = get_companies_by_industry(db, industry)
+    companies = get_companies_by_industry(db, industry_id)
     return companies
 

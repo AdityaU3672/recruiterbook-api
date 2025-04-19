@@ -1,7 +1,7 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
-from models import User, Recruiter, Company, Review, ReviewVote
-from schemas import UserCreate, RecruiterCreate, ReviewCreate, ReviewUpdate
+from models import User, Recruiter, Company, Review, ReviewVote, IndustryEnum
+from schemas import UserCreate, RecruiterCreate, ReviewCreate, ReviewUpdate, IndustryEnum as SchemaIndustryEnum
 from ai_service import generate_summary
 from google import verify_recruiter, infer_company_industry
 import uuid
@@ -66,43 +66,19 @@ def get_or_create_company(db: Session, company_name: str):
     company = db.query(Company).filter(Company.name == company_name).first()
     if not company:
         # Create a new company and infer its industry
-        industry = infer_company_industry(company_name)
+        industry_str = infer_company_industry(company_name)
         
-        # Ensure the industry is one of our four categories
-        valid_industries = ["Tech", "Finance", "Consulting", "Healthcare"]
-        if industry not in valid_industries and industry != "Unknown":
-            # If not a valid industry but we have a best guess, map it to one of our categories
-            # This is a fallback in case the inference function somehow returns something else
-            industry_map = {
-                "Retail": "Tech",
-                "Media": "Tech",
-                "Education": "Consulting",
-                "Manufacturing": "Tech",
-                "Real Estate": "Finance",
-                "Energy": "Tech",
-                "Transportation": "Tech"
-            }
-            industry = industry_map.get(industry, "Tech")  # Default to Tech if no mapping
+        # Convert string industry to enum integer
+        industry_int = IndustryEnum.from_str(industry_str)
         
-        # If still Unknown, default to Tech as a reasonable fallback
-        if industry == "Unknown":
-            industry = "Tech"
-            
-        company = Company(id=str(uuid.uuid4()), name=company_name, industry=industry)
+        company = Company(id=str(uuid.uuid4()), name=company_name, industry=industry_int)
         db.add(company)
         db.commit()
         db.refresh(company)
-    elif not company.industry or company.industry not in ["Tech", "Finance", "Consulting", "Healthcare"]:
+    elif not company.industry or not isinstance(company.industry, int) or company.industry not in [0, 1, 2, 3]:
         # If company exists but doesn't have a valid industry, infer and set it
-        industry = infer_company_industry(company_name)
-        
-        # Ensure the industry is one of our four categories
-        valid_industries = ["Tech", "Finance", "Consulting", "Healthcare"]
-        if industry not in valid_industries:
-            # Default to Tech if the inferred industry is not in our list
-            industry = "Tech"
-            
-        company.industry = industry
+        industry_str = infer_company_industry(company_name)
+        company.industry = IndustryEnum.from_str(industry_str)
         db.commit()
         db.refresh(company)
     return company
@@ -500,47 +476,44 @@ def get_all_recruiters(db: Session):
     """
     return db.query(Recruiter).all()
 
-def get_reviews_by_industry(db: Session, industry: str):
+def get_reviews_by_industry(db: Session, industry_id: int):
     """Retrieve all reviews for recruiters at companies in a specific industry."""
-    # Standardize the industry input (capitalize first letter)
-    normalized_industry = industry.strip().title()
-    
-    # Define the valid industry categories
-    valid_industries = ["Tech", "Finance", "Consulting", "Healthcare"]
-    
-    # If the input is a valid industry, do an exact match
-    if normalized_industry in valid_industries:
-        companies = db.query(Company).filter(Company.industry == normalized_industry).all()
-    else:
-        # Handle potential partial matches or misspellings with case-insensitive search
-        companies = db.query(Company).filter(
-            Company.industry.ilike(f"%{normalized_industry}%")
-        ).all()
-    
-    if not companies:
-        return []
+    try:
+        # Validate the industry ID
+        industry_id = int(industry_id)
+        if industry_id not in [0, 1, 2, 3]:
+            return []
+            
+        # Get all companies in the specified industry
+        companies = db.query(Company).filter(Company.industry == industry_id).all()
         
-    company_ids = [company.id for company in companies]
-    
-    # Get all recruiters from these companies
-    recruiters = db.query(Recruiter).filter(Recruiter.company_id.in_(company_ids)).all()
-    
-    if not recruiters:
-        return []
+        if not companies:
+            return []
+            
+        company_ids = [company.id for company in companies]
         
-    recruiter_ids = [recruiter.id for recruiter in recruiters]
-    
-    # Get all reviews for these recruiters
-    reviews = db.query(Review).filter(Review.recruiter_id.in_(recruiter_ids)).all()
-    
-    return reviews
+        # Get all recruiters from these companies
+        recruiters = db.query(Recruiter).filter(Recruiter.company_id.in_(company_ids)).all()
+        
+        if not recruiters:
+            return []
+            
+        recruiter_ids = [recruiter.id for recruiter in recruiters]
+        
+        # Get all reviews for these recruiters
+        reviews = db.query(Review).filter(Review.recruiter_id.in_(recruiter_ids)).all()
+        
+        return reviews
+    except (ValueError, TypeError):
+        # Handle case where industry_id can't be converted to int
+        return []
 
 def update_all_company_industries(db: Session, force_update=False):
     """
     Updates industry information for all companies in the database.
     If force_update is True, all companies will be updated regardless of whether they already have an industry set.
     If force_update is False, only companies without an industry set will be updated.
-    Ensures all companies are categorized as either "Tech", "Finance", "Consulting", or "Healthcare".
+    Ensures all companies are categorized using the industry enum integers.
     """
     import threading
     from google import infer_company_industry
@@ -549,11 +522,10 @@ def update_all_company_industries(db: Session, force_update=False):
     if force_update:
         companies = db.query(Company).all()
     else:
-        # Only update companies without industry or with industries not in our list
-        valid_industries = ["Tech", "Finance", "Consulting", "Healthcare"]
+        # Only update companies without industry or with industries not as integers
         companies = db.query(Company).filter(
             (Company.industry.is_(None)) | 
-            (~Company.industry.in_(valid_industries))
+            (~Company.industry.in_([0, 1, 2, 3]))
         ).all()
     
     if not companies:
@@ -564,7 +536,8 @@ def update_all_company_industries(db: Session, force_update=False):
         with SessionLocal() as thread_db:
             company = thread_db.query(Company).filter(Company.id == company_id).first()
             if company:
-                company.industry = infer_company_industry(company.name)
+                industry_str = infer_company_industry(company.name)
+                company.industry = IndustryEnum.from_str(industry_str)
                 thread_db.commit()
     
     # Create and start threads for each company update
@@ -583,32 +556,27 @@ def update_all_company_industries(db: Session, force_update=False):
 
 def get_all_industries(db: Session):
     """
-    Returns a list of the four industry categories: Tech, Finance, Consulting, Healthcare.
-    This hardcoded list ensures we only use our predefined categories.
+    Returns a list of all industry IDs and their corresponding names.
     """
-    return ["Tech", "Finance", "Consulting", "Healthcare"]
+    from schemas import IndustryResponse
+    return IndustryResponse.get_all()
 
-def get_companies_by_industry(db: Session, industry: str):
+def get_companies_by_industry(db: Session, industry_id: int):
     """
     Retrieve all companies belonging to a specific industry.
-    Industry search is case-insensitive and handles exact or partial matches.
     """
-    # Standardize the industry input (capitalize first letter)
-    normalized_industry = industry.strip().title()
-    
-    # Define the valid industry categories
-    valid_industries = ["Tech", "Finance", "Consulting", "Healthcare"]
-    
-    # If the input is a valid industry, do an exact match
-    if normalized_industry in valid_industries:
-        companies = db.query(Company).filter(Company.industry == normalized_industry).all()
-    else:
-        # Handle potential partial matches or misspellings with case-insensitive search
-        companies = db.query(Company).filter(
-            Company.industry.ilike(f"%{normalized_industry}%")
-        ).all()
-    
-    return companies
+    try:
+        # Validate the industry ID
+        industry_id = int(industry_id)
+        if industry_id not in [0, 1, 2, 3]:
+            return []
+            
+        # Get all companies in the specified industry
+        companies = db.query(Company).filter(Company.industry == industry_id).all()
+        return companies
+    except (ValueError, TypeError):
+        # Handle case where industry_id can't be converted to int
+        return []
 
 
 
