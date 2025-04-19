@@ -13,10 +13,12 @@ class UserResponse(BaseModel):
 
 class CompanyCreate(BaseModel):
     name: str
+    industry: Optional[str] = None
 
 class CompanyResponse(BaseModel):
     id: str
     name: str
+    industry: Optional[str] = None
 
 class RecruiterCreate(BaseModel):
     fullName: str

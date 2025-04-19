@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from sqlalchemy.orm import Session
 from database import SessionLocal, engine, Base
-from crud import downvote_review, get_or_create_user, get_or_create_recruiter, find_recruiters, get_reviews_by_company, post_review, get_reviews, get_companies, get_recruiter_by_id, delete_company_by_name, get_all_reviews, upvote_review, get_reviews_by_user, get_user_helpfulness_score, update_review, delete_review, get_all_recruiters
+from crud import downvote_review, get_or_create_user, get_or_create_recruiter, find_recruiters, get_reviews_by_company, post_review, get_reviews, get_companies, get_recruiter_by_id, delete_company_by_name, get_all_reviews, upvote_review, get_reviews_by_user, get_user_helpfulness_score, update_review, delete_review, get_all_recruiters, get_reviews_by_industry, update_all_company_industries, get_all_industries, get_companies_by_industry
 from schemas import UserCreate, UserResponse, RecruiterCreate, RecruiterResponse, ReviewCreate, ReviewResponse, CompanyResponse, HelpfulnessScore, ReviewUpdate
 from models import Review
 from typing import List
@@ -95,6 +95,13 @@ def get_reviews_for_company(company_name: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="No reviews found for this company")
     return reviews
 
+@app.get("/reviews/industry/{industry}", response_model=List[ReviewResponse])
+def get_reviews_by_industry_endpoint(industry: str, db: Session = Depends(get_db)):
+    """
+    Retrieve all reviews for recruiters at companies in a specific industry.
+    """
+    reviews = get_reviews_by_industry(db, industry)
+    return reviews
 
 # Create Recruiter - Add rate limiting per user
 @app.post("/recruiter/", response_model=RecruiterResponse)
@@ -277,4 +284,46 @@ def remove_review(
         raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/admin/update-industries")
+@limiter.limit("1/hour")
+def update_industries(
+    force_update: bool = False,
+    db: Session = Depends(get_db),
+    request: Request = None
+):
+    """
+    Admin endpoint to update industry information for companies.
+    If force_update is True, it will update all companies regardless of existing industry data.
+    If force_update is False, it will only update companies without industry information
+    or with industries outside our four categories.
+    """
+    result = update_all_company_industries(db, force_update)
+    return result
+
+@app.post("/admin/update-all-industries")
+def update_all_industries_endpoint(
+    db: Session = Depends(get_db)
+):
+    """
+    Special endpoint to update all companies in the database to use only
+    the four industry categories: Tech, Finance, Consulting, and Healthcare.
+    """
+    result = update_all_company_industries(db, force_update=True)
+    return result
+
+@app.get("/industries/", response_model=List[str])
+def get_industries(db: Session = Depends(get_db)):
+    """
+    Returns a list of all unique industries in the database.
+    """
+    return get_all_industries(db)
+
+@app.get("/companies/industry/{industry}", response_model=List[CompanyResponse])
+def get_companies_by_industry_endpoint(industry: str, db: Session = Depends(get_db)):
+    """
+    Retrieve all companies belonging to a specific industry.
+    """
+    companies = get_companies_by_industry(db, industry)
+    return companies
 
