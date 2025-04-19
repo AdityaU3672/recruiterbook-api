@@ -1,6 +1,6 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
-from models import User, Recruiter, Company, Review, ReviewVote, IndustryEnum
+from models import User, Recruiter, Company, Review, ReviewVote, IndustryEnum, FeaturedRecruiter
 from schemas import UserCreate, RecruiterCreate, ReviewCreate, ReviewUpdate, IndustryEnum as SchemaIndustryEnum
 from ai_service import generate_summary
 from google import verify_recruiter, infer_company_industry
@@ -577,6 +577,107 @@ def get_companies_by_industry(db: Session, industry_id: int):
     except (ValueError, TypeError):
         # Handle case where industry_id can't be converted to int
         return []
+
+def get_featured_recruiters(db: Session):
+    """
+    Returns a fixed list of 5 featured recruiters.
+    Uses a database table to ensure consistency across server restarts.
+    """
+    # Check if featured recruiters are already set in the database
+    featured_db = db.query(FeaturedRecruiter).order_by(FeaturedRecruiter.display_order).all()
+    
+    # If we have at least 3 featured recruiters in the database, use those
+    if len(featured_db) >= 3:
+        # Get the actual recruiter objects
+        featured_recruiters = []
+        for featured in featured_db:
+            recruiter = db.query(Recruiter).filter(Recruiter.id == featured.recruiter_id).first()
+            if recruiter:
+                featured_recruiters.append(recruiter)
+        
+        # If we still have enough recruiters, return them
+        if len(featured_recruiters) >= 3:
+            return featured_recruiters
+    
+    # If we don't have enough featured recruiters, select new ones
+    
+    # First, clear any existing featured recruiters
+    db.query(FeaturedRecruiter).delete()
+    db.commit()
+    
+    # Get all recruiters
+    all_recruiters = db.query(Recruiter).all()
+    
+    if not all_recruiters:
+        return []
+    
+    # For consistency, we'll pick a deterministic list:
+    # 1. First try to get recruiters with highest ratings
+    # 2. If not enough, fill with the first recruiters we find
+    
+    # Sort by average ratings (using the sum as a simple proxy for quality)
+    sorted_recruiters = sorted(
+        all_recruiters, 
+        key=lambda r: (r.avg_resp + r.avg_prof + r.avg_help + r.avg_final_stage), 
+        reverse=True
+    )
+    
+    # Get a mix of industries if possible
+    featured = []
+    tech_added = False
+    finance_added = False
+    consulting_added = False
+    healthcare_added = False
+    
+    # First add one from each industry if available
+    for recruiter in sorted_recruiters:
+        if len(featured) >= 5:
+            break
+            
+        # Try to get company industry
+        company = recruiter.company
+        if not company or company.industry is None:
+            continue
+            
+        if company.industry == IndustryEnum.TECH and not tech_added:
+            featured.append(recruiter)
+            tech_added = True
+        elif company.industry == IndustryEnum.FINANCE and not finance_added:
+            featured.append(recruiter)
+            finance_added = True
+        elif company.industry == IndustryEnum.CONSULTING and not consulting_added:
+            featured.append(recruiter)
+            consulting_added = True
+        elif company.industry == IndustryEnum.HEALTHCARE and not healthcare_added:
+            featured.append(recruiter)
+            healthcare_added = True
+    
+    # Fill the rest with top rated recruiters regardless of industry
+    remaining_slots = 5 - len(featured)
+    if remaining_slots > 0:
+        # Filter out already selected recruiters
+        remaining_recruiters = [r for r in sorted_recruiters if r not in featured]
+        # Add remaining top rated recruiters
+        featured.extend(remaining_recruiters[:remaining_slots])
+    
+    # If we still need more, add unsorted recruiters to reach 5 total
+    if len(featured) < 5 and len(all_recruiters) >= 5:
+        # Add any remaining recruiters not already in featured
+        for recruiter in all_recruiters:
+            if recruiter not in featured:
+                featured.append(recruiter)
+                if len(featured) >= 5:
+                    break
+    
+    # Store the selected recruiters in the database for future consistency
+    for i, recruiter in enumerate(featured[:5]):
+        db.add(FeaturedRecruiter(
+            recruiter_id=recruiter.id,
+            display_order=i
+        ))
+    db.commit()
+    
+    return featured[:5]  # Return at most 5 recruiters
 
 
 

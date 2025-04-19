@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from sqlalchemy.orm import Session
 from database import SessionLocal, engine, Base
-from crud import downvote_review, get_or_create_user, get_or_create_recruiter, find_recruiters, get_reviews_by_company, post_review, get_reviews, get_companies, get_recruiter_by_id, delete_company_by_name, get_all_reviews, upvote_review, get_reviews_by_user, get_user_helpfulness_score, update_review, delete_review, get_all_recruiters, get_reviews_by_industry, update_all_company_industries, get_all_industries, get_companies_by_industry
+from crud import downvote_review, get_or_create_user, get_or_create_recruiter, find_recruiters, get_reviews_by_company, post_review, get_reviews, get_companies, get_recruiter_by_id, delete_company_by_name, get_all_reviews, upvote_review, get_reviews_by_user, get_user_helpfulness_score, update_review, delete_review, get_all_recruiters, get_reviews_by_industry, update_all_company_industries, get_all_industries, get_companies_by_industry, get_featured_recruiters
 from schemas import UserCreate, UserResponse, RecruiterCreate, RecruiterResponse, ReviewCreate, ReviewResponse, CompanyResponse, HelpfulnessScore, ReviewUpdate, IndustryResponse
 from models import Review, IndustryEnum
 from typing import List
@@ -154,6 +154,14 @@ def get_all_companies(db: Session = Depends(get_db)):
 @app.get("/recruiters/", response_model=List[RecruiterResponse])
 def get_all_recruiters_endpoint(db: Session = Depends(get_db)):
     return get_all_recruiters(db)
+
+@app.get("/recruiters/featured/", response_model=List[RecruiterResponse])
+def get_featured_recruiters_endpoint(db: Session = Depends(get_db)):
+    """
+    Returns a list of featured recruiters (always the same 5 recruiters).
+    This is a curated list including recruiters from different industries.
+    """
+    return get_featured_recruiters(db)
 
 @app.delete("/company/{company_name}")
 @limiter.limit("10/minute", key_func=get_user_id_for_limiter)

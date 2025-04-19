@@ -56,6 +56,15 @@ class Recruiter(Base):
     summary = Column(String, default="")
     company = relationship("Company")
 
+class FeaturedRecruiter(Base):
+    __tablename__ = "featured_recruiters"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    recruiter_id = Column(String, ForeignKey("recruiters.id"), nullable=False)
+    display_order = Column(Integer, nullable=False)  # Order to display the recruiters
+    
+    # Relationship to the recruiter
+    recruiter = relationship("Recruiter")
+
 class Review(Base):
     __tablename__ = "reviews"
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
