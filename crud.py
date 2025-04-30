@@ -1,6 +1,6 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
-from models import User, Recruiter, Company, Review, ReviewVote, IndustryEnum, FeaturedRecruiter
+from models import User, Recruiter, Company, Review, ReviewVote, IndustryEnum
 from schemas import UserCreate, RecruiterCreate, ReviewCreate, ReviewUpdate, IndustryEnum as SchemaIndustryEnum
 from ai_service import generate_summary
 from google import verify_recruiter, infer_company_industry
@@ -580,104 +580,64 @@ def get_companies_by_industry(db: Session, industry_id: int):
 
 def get_featured_recruiters(db: Session):
     """
-    Returns a fixed list of 5 featured recruiters.
-    Uses a database table to ensure consistency across server restarts.
+    Returns recruiters added by specific users: Aditya Uchil or Rishi Papani.
     """
-    # Check if featured recruiters are already set in the database
-    featured_db = db.query(FeaturedRecruiter).order_by(FeaturedRecruiter.display_order).all()
+    # Get the user IDs for Aditya and Rishi
+    aditya = db.query(User).filter(User.fullName == "Aditya Uchil").first()
+    rishi = db.query(User).filter(User.fullName == "Rishi Papani").first()
     
-    # If we have at least 3 featured recruiters in the database, use those
-    if len(featured_db) >= 3:
-        # Get the actual recruiter objects
-        featured_recruiters = []
-        for featured in featured_db:
-            recruiter = db.query(Recruiter).filter(Recruiter.id == featured.recruiter_id).first()
-            if recruiter:
-                featured_recruiters.append(recruiter)
-        
-        # If we still have enough recruiters, return them
-        if len(featured_recruiters) >= 3:
-            return featured_recruiters
+    featured_recruiters = []
+    user_ids = []
     
-    # If we don't have enough featured recruiters, select new ones
+    # Add their user IDs if found
+    if aditya:
+        user_ids.append(aditya.id)
+    if rishi:
+        user_ids.append(rishi.id)
     
-    # First, clear any existing featured recruiters
-    db.query(FeaturedRecruiter).delete()
-    db.commit()
-    
-    # Get all recruiters
-    all_recruiters = db.query(Recruiter).all()
-    
-    if not all_recruiters:
+    if not user_ids:
+        # If neither user is found, return empty list
         return []
     
-    # For consistency, we'll pick a deterministic list:
-    # 1. First try to get recruiters with highest ratings
-    # 2. If not enough, fill with the first recruiters we find
+    # Get all reviews written by either user
+    reviews = db.query(Review).filter(Review.user_id.in_(user_ids)).all()
     
-    # Sort by average ratings (using the sum as a simple proxy for quality)
-    sorted_recruiters = sorted(
-        all_recruiters, 
-        key=lambda r: (r.avg_resp + r.avg_prof + r.avg_help + r.avg_final_stage), 
-        reverse=True
-    )
+    if not reviews:
+        return []
     
-    # Get a mix of industries if possible
-    featured = []
-    tech_added = False
-    finance_added = False
-    consulting_added = False
-    healthcare_added = False
+    # Get unique recruiter IDs from the reviews
+    recruiter_ids = list(set(review.recruiter_id for review in reviews))
     
-    # First add one from each industry if available
-    for recruiter in sorted_recruiters:
-        if len(featured) >= 5:
-            break
-            
-        # Try to get company industry
-        company = recruiter.company
-        if not company or company.industry is None:
-            continue
-            
-        if company.industry == IndustryEnum.TECH and not tech_added:
-            featured.append(recruiter)
-            tech_added = True
-        elif company.industry == IndustryEnum.FINANCE and not finance_added:
-            featured.append(recruiter)
-            finance_added = True
-        elif company.industry == IndustryEnum.CONSULTING and not consulting_added:
-            featured.append(recruiter)
-            consulting_added = True
-        elif company.industry == IndustryEnum.HEALTHCARE and not healthcare_added:
-            featured.append(recruiter)
-            healthcare_added = True
+    # Get the recruiters
+    recruiters = db.query(Recruiter).filter(Recruiter.id.in_(recruiter_ids)).all()
     
-    # Fill the rest with top rated recruiters regardless of industry
-    remaining_slots = 5 - len(featured)
-    if remaining_slots > 0:
-        # Filter out already selected recruiters
-        remaining_recruiters = [r for r in sorted_recruiters if r not in featured]
-        # Add remaining top rated recruiters
-        featured.extend(remaining_recruiters[:remaining_slots])
+    return recruiters
+
+def get_editors_pick_reviews(db: Session):
+    """
+    Returns reviews written by specific users: Aditya Uchil or Rishi Papani.
+    These are considered editor's picks.
+    """
+    # Get the user IDs for Aditya and Rishi
+    aditya = db.query(User).filter(User.fullName == "Aditya Uchil").first()
+    rishi = db.query(User).filter(User.fullName == "Rishi Papani").first()
     
-    # If we still need more, add unsorted recruiters to reach 5 total
-    if len(featured) < 5 and len(all_recruiters) >= 5:
-        # Add any remaining recruiters not already in featured
-        for recruiter in all_recruiters:
-            if recruiter not in featured:
-                featured.append(recruiter)
-                if len(featured) >= 5:
-                    break
+    user_ids = []
     
-    # Store the selected recruiters in the database for future consistency
-    for i, recruiter in enumerate(featured[:5]):
-        db.add(FeaturedRecruiter(
-            recruiter_id=recruiter.id,
-            display_order=i
-        ))
-    db.commit()
+    # Add their user IDs if found
+    if aditya:
+        user_ids.append(aditya.id)
+    if rishi:
+        user_ids.append(rishi.id)
     
-    return featured[:5]  # Return at most 5 recruiters
+    if not user_ids:
+        # If neither user is found, return empty list
+        return []
+    
+    # Get all reviews written by either user
+    reviews = db.query(Review).filter(Review.user_id.in_(user_ids)).all()
+    
+    return reviews
 
 
 
