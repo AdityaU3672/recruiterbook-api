@@ -17,7 +17,16 @@ if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
 if not DATABASE_URL:
     DATABASE_URL = "postgresql://adityauchil@localhost:5432/recruiterbook"
 
-engine = create_engine(DATABASE_URL)
+# Configure the engine with optimized connection pooling settings
+engine = create_engine(
+    DATABASE_URL, 
+    pool_size=20,               # Maximum number of connections in the pool
+    max_overflow=10,            # Allow 10 connections beyond pool_size when needed
+    pool_timeout=30,            # Timeout waiting for a connection from pool (seconds)
+    pool_recycle=1800,          # Recycle connections after 30 minutes to avoid stale connections
+    pool_pre_ping=True          # Verify connection is valid before using it (prevents using broken connections)
+)
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 

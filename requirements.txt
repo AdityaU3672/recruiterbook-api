@@ -13,3 +13,5 @@ psycopg2-binary
 fuzzywuzzy
 python-Levenshtein
 slowapi
+redis>=4.6.0
+fastapi-cache2[redis]>=0.2.2

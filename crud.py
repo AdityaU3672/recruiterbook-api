@@ -395,15 +395,12 @@ def get_user_helpfulness_score(db: Session, user_id: str):
         "helpfulness_score": total_upvotes - total_downvotes
     }
 
-def update_review(db: Session, review_id: int, user_id: str, review_data: ReviewUpdate):
-    """Update a review by its ID and user ID."""
-    review = db.query(Review).filter(
-        Review.id == review_id,
-        Review.user_id == user_id
-    ).first()
+def update_review(db: Session, review_id: int, review_data: ReviewUpdate):
+    """Update a review by its ID."""
+    review = db.query(Review).filter(Review.id == review_id).first()
     
     if not review:
-        raise HTTPException(status_code=404, detail="Review not found or unauthorized")
+        raise HTTPException(status_code=404, detail="Review not found")
     
     # Update only the fields that were provided
     update_data = review_data.dict(exclude_unset=True)
@@ -424,51 +421,80 @@ def update_review(db: Session, review_id: int, user_id: str, review_data: Review
     recruiter.avg_prof = sum(r.professionalism for r in reviews) // len(reviews)
     recruiter.avg_help = sum(r.helpfulness for r in reviews) // len(reviews)
     recruiter.avg_final_stage = sum(r.final_stage for r in reviews) // len(reviews)
-    recruiter.summary = generate_summary(reviews)
+    
+    # Generate summary in the background
+    def generate_summary_bg():
+        try:
+            summary_text = generate_summary(reviews)
+            recruiter.summary = summary_text
+            db.commit()
+        except Exception as e:
+            print(f"Background summary generation failed: {str(e)}")
+    
+    thread = threading.Thread(target=generate_summary_bg)
+    thread.daemon = True
+    thread.start()
     
     db.commit()
     return review
 
-def delete_review(db: Session, review_id: int, user_id: str):
-    """Delete a review by its ID and user ID."""
-    review = db.query(Review).filter(
-        Review.id == review_id,
-        Review.user_id == user_id
-    ).first()
+def delete_review(db: Session, review_id: int):
+    """Delete a review by its ID."""
+    review = db.query(Review).filter(Review.id == review_id).first()
     
     if not review:
-        raise HTTPException(status_code=404, detail="Review not found or unauthorized")
+        raise HTTPException(status_code=404, detail="Review not found")
     
     recruiter_id = review.recruiter_id
     
     # First delete all associated votes to avoid foreign key constraint violations
     db.query(ReviewVote).filter(ReviewVote.review_id == review_id).delete()
     
-    # Then delete the review
-    db.delete(review)
-    db.commit()
-    
-    # Update recruiter's average ratings
-    recruiter = db.query(Recruiter).filter(Recruiter.id == recruiter_id).first()
-    if recruiter:
-        reviews = db.query(Review).filter(Review.recruiter_id == recruiter_id).all()
-        if reviews:
-            recruiter.avg_resp = sum(r.responsiveness for r in reviews) // len(reviews)
-            recruiter.avg_prof = sum(r.professionalism for r in reviews) // len(reviews)
-            recruiter.avg_help = sum(r.helpfulness for r in reviews) // len(reviews)
-            recruiter.avg_final_stage = sum(r.final_stage for r in reviews) // len(reviews)
-            recruiter.summary = generate_summary(reviews)
-        else:
-            # If no reviews left, reset averages to 0
-            recruiter.avg_resp = 0
-            recruiter.avg_prof = 0
-            recruiter.avg_help = 0
-            recruiter.avg_final_stage = 0
-            recruiter.summary = "No reviews available."
-        
+    try:
+        # Delete the review
+        db.delete(review)
         db.commit()
-    
-    return {"message": "Review deleted successfully"}
+        
+        # Update recruiter's average ratings
+        recruiter = db.query(Recruiter).filter(Recruiter.id == recruiter_id).first()
+        if recruiter:
+            reviews = db.query(Review).filter(Review.recruiter_id == recruiter_id).all()
+            if reviews:
+                recruiter.avg_resp = sum(r.responsiveness for r in reviews) // len(reviews)
+                recruiter.avg_prof = sum(r.professionalism for r in reviews) // len(reviews)
+                recruiter.avg_help = sum(r.helpfulness for r in reviews) // len(reviews)
+                recruiter.avg_final_stage = sum(r.final_stage for r in reviews) // len(reviews)
+                
+                # Update summary in the background
+                def update_summary_bg():
+                    try:
+                        summary_text = generate_summary(reviews)
+                        with SessionLocal() as bg_db:
+                            bg_recruiter = bg_db.query(Recruiter).filter(Recruiter.id == recruiter_id).first()
+                            if bg_recruiter:
+                                bg_recruiter.summary = summary_text
+                                bg_db.commit()
+                    except Exception as e:
+                        print(f"Background summary update failed: {str(e)}")
+                
+                thread = threading.Thread(target=update_summary_bg)
+                thread.daemon = True
+                thread.start()
+            else:
+                # If no reviews left, reset averages to 0
+                recruiter.avg_resp = 0
+                recruiter.avg_prof = 0
+                recruiter.avg_help = 0
+                recruiter.avg_final_stage = 0
+                recruiter.summary = "No reviews available."
+            
+            db.commit()
+        
+        return True
+    except Exception as e:
+        db.rollback()
+        print(f"Error deleting review: {str(e)}")
+        return False
 
 def get_all_recruiters(db: Session):
     """

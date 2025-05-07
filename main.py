@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi import FastAPI, Depends, HTTPException, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from sqlalchemy.orm import Session
@@ -11,6 +11,8 @@ import uvicorn
 import os
 from auth import get_current_user_from_cookie, router as auth_router
 from starlette.middleware.sessions import SessionMiddleware
+from cache import setup_cache, invalidate_cache_keys, invalidate_all_cache
+from fastapi_cache.decorator import cache
 
 # Import slowapi for rate limiting
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -51,6 +53,11 @@ app.add_middleware(SessionMiddleware, secret_key="YOUR_RANDOM_SECRET")
 # Initialize DB
 Base.metadata.create_all(bind=engine)
 
+# Setup cache on application startup
+@app.on_event("startup")
+async def startup_event():
+    await setup_cache()
+
 # Dependency: Get DB session
 def get_db():
     db = SessionLocal()
@@ -73,15 +80,21 @@ app.include_router(auth_router, prefix="/auth", tags=["auth"])
 # User Authentication (IP-based rate limiting since it's before authentication)
 @app.post("/user/", response_model=UserResponse)
 @limiter.limit("20/minute")
-def create_or_get_user(user: UserCreate, db: Session = Depends(get_db), request: Request = None):
-    return get_or_create_user(db, user)
+def create_or_get_user(user: UserCreate, db: Session = Depends(get_db), request: Request = None, background_tasks: BackgroundTasks = None):
+    result = get_or_create_user(db, user)
+    # Invalidate any cached user data
+    if background_tasks:
+        background_tasks.add_task(invalidate_cache_keys, ["*user*"])
+    return result
 
 # Find Recruiter
 @app.get("/recruiter/", response_model=List[RecruiterResponse])
+@cache(expire=600)  # Cache for 10 minutes
 def find_recruiter(fullName: str, company: str = None, db: Session = Depends(get_db)):
     return find_recruiters(db, fullName, company)
 
 @app.get("/recruiter/{recruiter_id}", response_model=RecruiterResponse)
+@cache(expire=1800)  # Cache for 30 minutes
 def get_recruiter(recruiter_id: str, db: Session = Depends(get_db)):
     recruiter = get_recruiter_by_id(db, recruiter_id)
     if not recruiter:
@@ -89,6 +102,7 @@ def get_recruiter(recruiter_id: str, db: Session = Depends(get_db)):
     return recruiter
 
 @app.get("/reviews/company/{company_name}", response_model=List[ReviewResponse])
+@cache(expire=1800)  # Cache for 30 minutes
 def get_reviews_for_company(company_name: str, db: Session = Depends(get_db)):
     reviews = get_reviews_by_company(db, company_name)
     if not reviews:
@@ -96,6 +110,7 @@ def get_reviews_for_company(company_name: str, db: Session = Depends(get_db)):
     return reviews
 
 @app.get("/reviews/industry/{industry_id}", response_model=List[ReviewResponse])
+@cache(expire=3600)  # Cache for 1 hour
 def get_reviews_by_industry_endpoint(industry_id: int, db: Session = Depends(get_db)):
     """
     Retrieve all reviews for recruiters at companies in a specific industry.
@@ -108,8 +123,20 @@ def get_reviews_by_industry_endpoint(industry_id: int, db: Session = Depends(get
 # Create Recruiter - Add rate limiting per user
 @app.post("/recruiter/", response_model=RecruiterResponse)
 @limiter.limit("5/minute", key_func=get_user_id_for_limiter)
-def create_recruiter(recruiter: RecruiterCreate, db: Session = Depends(get_db), request: Request = None):
-    return get_or_create_recruiter(db, recruiter)
+def create_recruiter(
+    recruiter: RecruiterCreate, 
+    db: Session = Depends(get_db), 
+    request: Request = None,
+    background_tasks: BackgroundTasks = None
+):
+    result = get_or_create_recruiter(db, recruiter)
+    # Invalidate related caches
+    if background_tasks:
+        background_tasks.add_task(invalidate_cache_keys, [
+            "*recruiter*", 
+            f"*company*{result.company.name}*"
+        ])
+    return result
 
 # Post Review
 @app.post("/review/", response_model=ReviewResponse)
@@ -118,7 +145,8 @@ def create_review(
     review: ReviewCreate, 
     current_user: dict = Depends(get_current_user_from_cookie),
     db: Session = Depends(get_db),
-    request: Request = None
+    request: Request = None,
+    background_tasks: BackgroundTasks = None
 ):
     try:
         # Debug logging for troubleshooting
@@ -133,6 +161,15 @@ def create_review(
         review_obj = ReviewCreate(**review_data)
         
         new_review = post_review(db, review_obj)
+        
+        # Invalidate related caches
+        if background_tasks:
+            background_tasks.add_task(invalidate_cache_keys, [
+                f"*recruiter*{new_review.recruiter_id}*",
+                f"*reviews*",
+                f"*allReviews*"
+            ])
+        
         return new_review
     except HTTPException as e:
         print(f"Review creation failed with HTTP error: {e.detail}")
@@ -143,19 +180,23 @@ def create_review(
 
 # Get Reviews
 @app.get("/reviews/", response_model=List[ReviewResponse])
+@cache(expire=1800)  # Cache for 30 minutes
 def get_reviews_for_recruiter(recruiter_id: str, db: Session = Depends(get_db)):
     return get_reviews(db, recruiter_id)
 
 # Get All Companies
 @app.get("/companies/", response_model=List[CompanyResponse])
+@cache(expire=3600)  # Cache for 1 hour
 def get_all_companies(db: Session = Depends(get_db)):
     return get_companies(db)
 
 @app.get("/recruiters/", response_model=List[RecruiterResponse])
+@cache(expire=3600)  # Cache for 1 hour
 def get_all_recruiters_endpoint(db: Session = Depends(get_db)):
     return get_all_recruiters(db)
 
 @app.get("/recruiters/featured/", response_model=List[RecruiterResponse])
+@cache(expire=7200)  # Cache for 2 hours
 def get_featured_recruiters_endpoint(db: Session = Depends(get_db)):
     """
     Returns recruiters that have been added by either Aditya Uchil or Rishi Papani.
@@ -164,6 +205,7 @@ def get_featured_recruiters_endpoint(db: Session = Depends(get_db)):
     return get_featured_recruiters(db)
 
 @app.get("/editors-picks/", response_model=List[ReviewResponse])
+@cache(expire=7200)  # Cache for 2 hours
 def get_editors_pick_reviews_endpoint(db: Session = Depends(get_db)):
     """
     Returns reviews written by Aditya Uchil or Rishi Papani.
@@ -173,13 +215,28 @@ def get_editors_pick_reviews_endpoint(db: Session = Depends(get_db)):
 
 @app.delete("/company/{company_name}")
 @limiter.limit("10/minute", key_func=get_user_id_for_limiter)
-def delete_company(company_name: str, db: Session = Depends(get_db), request: Request = None):
+def delete_company(
+    company_name: str, 
+    db: Session = Depends(get_db), 
+    request: Request = None,
+    background_tasks: BackgroundTasks = None
+):
     company = delete_company_by_name(db, company_name)
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
+    
+    # Invalidate all company-related caches
+    if background_tasks:
+        background_tasks.add_task(invalidate_cache_keys, [
+            "*company*",
+            "*recruiter*",
+            "*review*"
+        ])
+    
     return {"message": f"Company '{company_name}' has been deleted successfully"}
 
 @app.get("/allReviews/", response_model=List[ReviewResponse])
+@cache(expire=1800)  # Cache for 30 minutes
 def get_all_reviews_endpoint(db: Session = Depends(get_db)):
     reviews = get_all_reviews(db)
     return reviews
@@ -190,7 +247,8 @@ def upvote(
     review_id: int, 
     current_user: dict = Depends(get_current_user_from_cookie),
     db: Session = Depends(get_db),
-    request: Request = None
+    request: Request = None,
+    background_tasks: BackgroundTasks = None
 ):
     try:
         original_review = db.query(Review).filter(Review.id == review_id).first()
@@ -201,6 +259,14 @@ def upvote(
         
         user_id = current_user.get("id")
         review = upvote_review(db, review_id, user_id)
+        
+        # Invalidate specific review cache
+        if background_tasks:
+            background_tasks.add_task(invalidate_cache_keys, [
+                f"*review*{review_id}*",
+                f"*reviews*",
+                f"*allReviews*"
+            ])
         
         # Determine if an upvote was added or removed
         if review.upvotes > original_upvotes:
@@ -218,7 +284,8 @@ def downvote(
     review_id: int,
     current_user: dict = Depends(get_current_user_from_cookie),
     db: Session = Depends(get_db),
-    request: Request = None
+    request: Request = None,
+    background_tasks: BackgroundTasks = None
 ):
     try:
         original_review = db.query(Review).filter(Review.id == review_id).first()
@@ -229,6 +296,14 @@ def downvote(
         
         user_id = current_user.get("id")
         review = downvote_review(db, review_id, user_id)
+        
+        # Invalidate specific review cache
+        if background_tasks:
+            background_tasks.add_task(invalidate_cache_keys, [
+                f"*review*{review_id}*",
+                f"*reviews*",
+                f"*allReviews*"
+            ])
         
         # Determine if a downvote was added or removed
         if review.downvotes > original_downvotes:
@@ -270,19 +345,31 @@ def edit_review(
     review_data: ReviewUpdate,
     current_user: dict = Depends(get_current_user_from_cookie),
     db: Session = Depends(get_db),
-    request: Request = None
+    request: Request = None,
+    background_tasks: BackgroundTasks = None
 ):
-    """
-    Edit a review. Only the review author can edit their own review.
-    """
-    try:
-        user_id = current_user.get("id")
-        updated_review = update_review(db, review_id, user_id, review_data)
-        return updated_review
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    # Get the current review
+    review = db.query(Review).filter(Review.id == review_id).first()
+    if not review:
+        raise HTTPException(status_code=404, detail="Review not found")
+    
+    # Verify the user owns this review
+    if review.user_id != current_user.get("id"):
+        raise HTTPException(status_code=403, detail="Not authorized to edit this review")
+    
+    # Update the review
+    updated_review = update_review(db, review_id, review_data)
+    
+    # Invalidate related caches
+    if background_tasks:
+        background_tasks.add_task(invalidate_cache_keys, [
+            f"*review*{review_id}*",
+            f"*recruiter*{review.recruiter_id}*",
+            f"*reviews*",
+            f"*allReviews*"
+        ])
+    
+    return updated_review
 
 @app.delete("/review/{review_id}/")
 @limiter.limit("10/minute", key_func=get_user_id_for_limiter)
@@ -290,33 +377,62 @@ def remove_review(
     review_id: int,
     current_user: dict = Depends(get_current_user_from_cookie),
     db: Session = Depends(get_db),
-    request: Request = None
+    request: Request = None,
+    background_tasks: BackgroundTasks = None
 ):
-    """
-    Delete a review. Only the review author can delete their own review.
-    """
-    try:
-        user_id = current_user.get("id")
-        return delete_review(db, review_id, user_id)
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    # Get the current review
+    review = db.query(Review).filter(Review.id == review_id).first()
+    if not review:
+        raise HTTPException(status_code=404, detail="Review not found")
+    
+    # Verify the user owns this review
+    if review.user_id != current_user.get("id"):
+        raise HTTPException(status_code=403, detail="Not authorized to delete this review")
+    
+    recruiter_id = review.recruiter_id
+    
+    # Delete the review
+    success = delete_review(db, review_id)
+    
+    # Invalidate related caches
+    if background_tasks and success:
+        background_tasks.add_task(invalidate_cache_keys, [
+            f"*review*{review_id}*",
+            f"*recruiter*{recruiter_id}*",
+            f"*reviews*", 
+            f"*allReviews*"
+        ])
+    
+    if success:
+        return {"message": "Review deleted successfully"}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to delete review")
 
 @app.post("/admin/update-industries")
 @limiter.limit("1/hour")
 def update_industries(
     force_update: bool = False,
     db: Session = Depends(get_db),
-    request: Request = None
+    request: Request = None,
+    background_tasks: BackgroundTasks = None
 ):
     """
-    Admin endpoint to update industry information for companies.
-    If force_update is True, it will update all companies regardless of existing industry data.
-    If force_update is False, it will only update companies without industry information
-    or with industries outside our four categories.
+    Admin endpoint to update industries for companies.
+    If force_update is True, all companies will be updated regardless of whether they already have an industry set.
+    If force_update is False, only companies without an industry set will be updated.
     """
-    result = update_all_company_industries(db, force_update)
+    from google import infer_company_industry
+    
+    result = update_all_company_industries(db, force_update=force_update)
+    
+    # Invalidate company and industry-related caches
+    if background_tasks:
+        background_tasks.add_task(invalidate_cache_keys, [
+            "*company*",
+            "*industry*",
+            "*reviews*industry*"
+        ])
+    
     return result
 
 @app.post("/admin/update-all-industries")
